@@ -21,7 +21,7 @@ class Playlist:
     def __init__(self):
         """Initialize Playlist Class"""
         self.logger = logger
-        self.logger.info('Playlist Class Initialized')
+        self.logger.debug('Playlist Class Initialized')
 
         if os.path.isfile(self.playlist_dates_path):
             self.playlist_dates = self.load_playlists_date()
@@ -49,7 +49,7 @@ class Playlist:
 
     def calculate_playlist_usage(self,file=None) -> list:
         playlist_usage=[]
-        self.logger.info('Calculate Playlist Usage')
+        self.logger.debug('Calculate Playlist Usage')
         if file == None:
             self.logger.debug('file is None')
             for self.playlist_name in self.playlist_dates:

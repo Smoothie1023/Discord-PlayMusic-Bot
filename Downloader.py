@@ -35,7 +35,7 @@ class Downloader:
     def __init__(self):
         """Initialize Downloader Class"""
         self.logger = logger
-        self.logger.info('Downloader Class Initialized')
+        self.logger.debug('Downloader Class Initialized')
 
     def streamming_youtubedl(self, url:str,options:list = ydl_opts_default) -> dict:
         """Streamming from YoutubeDL
