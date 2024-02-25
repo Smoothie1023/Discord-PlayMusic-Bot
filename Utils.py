@@ -1,9 +1,12 @@
+from functools import lru_cache
+import json
 import logging
 import re
-import requests
 from urllib.parse import urlparse
 from urllib.parse import parse_qs
 import urllib.request
+
+import requests
 from yt_dlp import YoutubeDL
 
 logger = logging.getLogger('PlayAudio')
@@ -20,6 +23,7 @@ class Utils:
         """Initialize Utils Class"""
         self.logger = logger
         self.logger.debug('Utils Class Initialized')
+        self.youtubeURLFormat = re.compile(r'https://(?:www\.)?youtube\.com/(?:[^/]+/)?(?:[^/]+/)?(?:watch\?v=)?([^/]+)')
 
     def delete_space(self,urls:list) -> list:
         """Delete Space
@@ -41,45 +45,44 @@ class Utils:
         """
         error = []
         self.logger.debug(f'Check URL: {urls}')
+        with requests.Session() as session:
+            for index in range(len(urls)):
+                if SUPPORTED_WEBSITES.search(urls[index]) is None:
+                    error.append(f':warning:[この動画サイト]({urls[index]})は対応してません。')
+                    urls[index] = None
+                    continue
+                if 't.co' in urls[index] or 'x.com' in urls[index]:
+                    urls[index] = session.get(urls[index]).url
+                if 'youtu' in urls[index]:
+                    if re.search(self.youtubeURLFormat, urls[index]):
+                        urls[index] = f'https://www.youtube.com/watch?v={re.search(self.youtubeURLFormat, urls[index]).group(1)}'
+                    if session.get(f'http://img.youtube.com/vi/{self.get_video_id(urls[index])}/mqdefault.jpg').status_code!=200:
+                        logger.warning(f'Youtube Video Not Found: {urls[index]}')
+                        error.append(f':warning:[こちらの動画]({urls[index]})は削除または非公開にされています。')
+                        urls[index] = None
+                        continue
+                    if self.is_music_premium_video(urls[index]):
+                        logger.warning(f'Youtube Music Premium Video: {urls[index]}')
+                        error.append(f':warning:[こちらの動画]({urls[index]})はYoutube Music Premiumの動画です。')
+                        urls[index] = None
+                        continue
+                    urls[index] = f'https://www.youtube.com/watch?v={self.get_video_id(urls[index])}'
+                if 'nicovideo' in urls[index]:
+                    if '?' in urls[index]:
+                        urls[index] = urls[index][:urls[index].find('?')]
+                if 'twitter' in urls[index]:
+                    if self.get_title_from_ytdlp(urls[index]) == "Not Found Video":
+                        logger.warning(f'Twitter Video Not Found: {urls[index]}')
+                        error.append(f':warning:[こちらのツイート]({urls[index]})から動画を取得できませんでした。')
+                        urls[index] = None
+                        continue
+            # Remove None from urls
+            urls = [url for url in urls if url is not None]
+            logger.debug(f'Check End URLs: {urls}')
+            return urls, error
 
-        for index in range(len(urls)):
-            if SUPPORTED_WEBSITES.search(urls[index]) is None:
-                error.append(f':warning:[この動画サイト]({urls[index]})は対応してません。')
-                urls[index] = None
-            if 't.co' in urls[index]:
-                urls[index] = requests.get(urls[index]).url
-            if 'youtu' in urls[index]:
-                if 'shorts' in urls[index]:
-                    urls[index] = 'https://www.youtube.com/watch?v=' + urlparse(urls[index]).path[8:]
-                    continue
-                if requests.get(f'http://img.youtube.com/vi/{self.GetVideoID(urls[index])}/mqdefault.jpg').status_code!=200:
-                    logger.warning(f'Youtube Video Not Found: {urls[index]}')
-                    error.append(f':warning:[こちらの動画]({urls[index]})は削除または非公開にされています。')
-                    urls[index] = None
-                    continue
-                if self.is_music_premium_video(urls[index]):
-                    logger.warning(f'Youtube Music Premium Video: {urls[index]}')
-                    error.append(f':warning:[こちらの動画]({urls[index]})はYoutube Music Premiumの動画です。')
-                    urls[index] = None
-                    continue
-                urls[index] = f'https://www.youtube.com/watch?v={self.GetVideoID(urls[index])}'
-                continue
-            if 'nicovideo' in urls[index]:
-                if '?' in urls[index]:
-                    urls[index] = urls[index][:urls[index].find('?')]
-                    continue
-            if 'twitter' in urls[index]:
-                if self.GetTweetVideoURL(urls[index]) == "Not Found Video":
-                    logger.warning(f'Twitter Video Not Found: {urls[index]}')
-                    error.append(f':warning:[こちらのツイート]({urls[index]})から動画を取得できませんでした。')
-                    urls[index] = None
-                    continue
-        # Remove None from urls
-        urls = [url for url in urls if url is not None]
-        logger.debug(f'Check End URLs: {urls}')
-        return urls, error
-
-    def GetVideoID(self, url:str) -> str:
+    @lru_cache(maxsize=500)
+    def get_video_id(self, url:str) -> str:
         """
         Get Video ID from URL
         Args:
@@ -90,9 +93,6 @@ class Utils:
             str: 'None' : Failed to get Video ID
         """
         logger.debug(f'Get Video ID from URL: {url}')
-        if 't.co' in url or 'x.com' in url:
-            url = requests.get(url).url
-            logger.debug(f'Convert t.co URL: {url}')
         if 'youtu.be' in url:
             logger.debug(f'Convert Youtube.be URL: {urlparse(url).path[1:]}')
             return urlparse(url).path[1:]
@@ -108,6 +108,8 @@ class Utils:
                 return url[url.rfind('sm'):]
             elif 'nm' in url:
                 return url[url.rfind('nm'):]
+            elif 'so' in url:
+                return url[url.rfind('so'):]
             else:
                 logger.warning('NicoNico Video ID Not Found')
                 logger.warning(f'URL: {url}')
@@ -126,6 +128,7 @@ class Utils:
             logger.warning(f'URL: {url}')
             return "None"
 
+    @lru_cache(maxsize=500)
     def is_music_premium_video(self, url:str) -> bool:
         """Check if the video is music premium
         Args:
@@ -140,7 +143,8 @@ class Utils:
         else:
             return False
 
-    def GetTweetVideoURL(self, url:str) -> str:
+    @lru_cache(maxsize=500)
+    def get_title_from_ytdlp(self, url:str) -> str:
         """Get Tweet Video URL
         Args:
             url (str): URL
@@ -153,8 +157,48 @@ class Utils:
             }
             with YoutubeDL(ydl_opts) as ydl:
                 title=ydl.extract_info(url,download=False)
-                print(title["title"])
         except:
-            return "Not Found Video"
+            logger.warning(f'Not Found Title Video from ytdlp: {url}')
+            return 'Not Found Video'
         else:
-            title["title"]
+            return title['title']
+
+    @lru_cache(maxsize=500)
+    def get_title_url(self, url:str) -> str:
+        """Get Title URL
+        Args:
+            url (str): URL
+        Returns:
+            str: Title
+        """
+        if 'youtu' in url:
+            params = {'format': 'json', 'url': url}
+            url = 'https://www.youtube.com/oembed'
+            query_string = urllib.parse.urlencode(params)
+            url = url + '?' + query_string
+
+            try:
+                with urllib.request.urlopen(url) as response:
+                    response_text = response.read()
+                    data = json.loads(response_text.decode())
+                    return data['title']
+            except urllib.error.HTTPError as e:
+                return self.get_title_from_ytdlp(url)
+        if 'nico' in url:
+            url = f'https://ext.nicovideo.jp/api/getthumbinfo/{self.get_video_id(url)}'
+            res = requests.get(url)
+            return res.text[res.text.find('<title>')+7:res.text.find('</title>')]
+        return self.get_title_from_ytdlp(url)
+
+    def chunk_list(self, urls:list, size:int)-> list:
+        """Chunk List
+        Note: This Function is used to chunk list
+
+        Args:
+            urls (list): List of URL
+            size (int): Size
+
+        Returns:
+            list: List of URL
+        """
+        return [urls[i:i+size] for i in range(0, len(urls), size)]
