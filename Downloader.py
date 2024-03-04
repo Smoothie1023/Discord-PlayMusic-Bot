@@ -97,12 +97,12 @@ class Downloader:
                         self.logger.warning('Not Supported Options')
                         return None
             except urllib.error.HTTPError as e:
-                self.logger.error(f'Exception: {e}')
+                self.logger.error(f'urllib.error.HTTPError Exception: {e}')
                 try:
                     info = self.streamming_youtubedl(source_url, self.ydl_opts_only_info)
                     self.logger.debug(f'Info: {info}')
                 except Exception as e:
-                    self.logger.error(f'Exception: {e}')
+                    self.logger.error(f'streamming_youtubedl Exception: {e}')
                     return None
                 if(options == 'title'):
                     title = info['title']

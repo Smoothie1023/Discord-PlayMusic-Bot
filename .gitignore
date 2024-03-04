@@ -163,5 +163,5 @@ cython_debug/
 DiscordTokens/*
 pyvenv.cfg
 Test/
-list/
-*.json
+lists/
+playlist_date.json

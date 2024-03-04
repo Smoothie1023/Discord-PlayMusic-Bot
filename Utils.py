@@ -45,6 +45,7 @@ class Utils:
         """
         error = []
         self.logger.debug(f'Check URL: {urls}')
+        urls=[url for url in urls if "http" in url]
         with requests.Session() as session:
             for index in range(len(urls)):
                 if SUPPORTED_WEBSITES.search(urls[index]) is None:
