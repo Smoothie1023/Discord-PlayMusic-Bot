@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import json
 import logging
 import os
@@ -18,7 +19,7 @@ from niconico import NicoNico
 import requests
 from yt_dlp import YoutubeDL
 
-import Downloader
+import Downloader as Downloader
 import Player
 import Playlist
 import Queue

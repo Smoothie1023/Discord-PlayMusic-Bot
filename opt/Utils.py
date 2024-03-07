@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from functools import lru_cache
 import json
 import logging
