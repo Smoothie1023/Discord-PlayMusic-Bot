@@ -8,4 +8,4 @@ services:
     working_dir: "/root/"
     tty: true
     volumes:
-      - ./opt:/root/opt
+      - ./src:/root/src

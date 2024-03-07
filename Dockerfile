@@ -33,4 +33,4 @@ RUN pip install discord.py
 RUN pip install niconico.py
 RUN pip install requests
 
-ENTRYPOINT ["python", "/root/opt/main.py"]
+ENTRYPOINT ["python", "/root/src/main.py"]
