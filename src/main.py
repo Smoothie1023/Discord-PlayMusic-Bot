@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 import json
 import logging
 import os
@@ -7,17 +7,13 @@ import time
 from collections import deque
 from datetime import datetime
 from typing import List, Literal
-import urllib.request
-from urllib.parse import urlparse, parse_qs
 
 import discord
 from discord import app_commands
 from discord.ext import tasks
 from discord.ui import Modal, View, text_input
-from bs4 import BeautifulSoup
 from niconico import NicoNico
 import requests
-from yt_dlp import YoutubeDL
 
 import Downloader as Downloader
 import Player
@@ -28,7 +24,7 @@ import Utils
 # Setup Logging
 logger = logging.getLogger('PlayAudio')
 logger.setLevel(logging.DEBUG)
-handler = logging.FileHandler('Log/PlayAudio.log', encoding='utf-8')
+handler = logging.FileHandler('../Log/PlayAudio.log', encoding='utf-8')
 logger.addHandler(handler)
 fmt = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 handler.setFormatter(fmt)
@@ -46,12 +42,12 @@ NCLIENT = NicoNico()
 NEXT_SONG = None
 IS_LOOP = False
 # PlayList Path
-PLAYLIST_PATH = 'lists/'
+PLAYLIST_PATH = '../lists/'
 # PlayList Dates Path
-PLAYLIST_DATES_PATH = './playlist_date.json'
+PLAYLIST_DATES_PATH = '../playlist_date.json'
 
 # Discord Token Folder Path
-DISCORD_TOKEN_FOLDER_PATH = 'DiscordTokens/'
+DISCORD_TOKEN_FOLDER_PATH = '../DiscordTokens/'
 # Load Discord Tokens
 with open(os.path.join(DISCORD_TOKEN_FOLDER_PATH, 'token.txt')) as t, \
     open(os.path.join(DISCORD_TOKEN_FOLDER_PATH, 'guild_id.txt')) as g, \
@@ -333,22 +329,23 @@ async def play(ctx:discord.Interaction, urls:str = None, playlists:str = None,
         if len(urls) != len(list(dict.fromkeys(urls))):
             embed = discord.Embed(title = ':warning:重複したURLは削除されました。', color = 0xffffff)
             await ctx.channel.send(embed = embed)
+
         urls = list(dict.fromkeys(urls))
-        urls, error = Utils.check_url(urls)
-        logger.info(f'URLs: {urls}')
+    urls, error = Utils.check_url(urls)
+    logger.info(f'URLs: {urls}')
 
-        # Check if Error Occurred
-        if error:
-            embed = discord.Embed(title = ':warning:以下のエラーが発生しました。', description = '\n'.join(error), color = 0xff0000)
-            await ctx.channel.send(embed = embed)
-            logger.error(f'CheckURLErrors: {error}')
+    # Check if Error Occurred
+    if error:
+        embed = discord.Embed(title = ':warning:以下のエラーが発生しました。', description = '\n'.join(error), color = 0xff0000)
+        await ctx.channel.send(embed = embed)
+        logger.error(f'CheckURLErrors: {error}')
 
-        # Check if URL does not exist
-        if len(urls) == 0:
-            embed = discord.Embed(title = ':warning:無効なURLが指定されました、URLを確認して再度実行してください。', color = 0xff0000)
-            await ctx.followup.send(embed = embed)
-            logger.warning('URL does not exist')
-            return
+    # Check if URL does not exist
+    if len(urls) == 0:
+        embed = discord.Embed(title = ':warning:無効なURLが指定されました、URLを確認して再度実行してください。', color = 0xff0000)
+        await ctx.followup.send(embed = embed)
+        logger.warning('URL does not exist')
+        return
 
     if not ctx.guild.voice_client:
         # Connect to Voice Channel
@@ -377,13 +374,14 @@ async def play(ctx:discord.Interaction, urls:str = None, playlists:str = None,
         embed = discord.Embed(description = f'{len(urls)}曲をキューに追加しました。', color = 0xffffff)
         await ctx.followup.send(embed = embed)
 
-        # Show Queue
-        PAGES = len(Utils.chunk_list(urls, 10))
-        for i in range(PAGES):
-            queue_slice = urls[i*10:(i+1)*10]
-            queue_description = '\n'.join(f'[{Utils.get_title_url(item)}]({item})' for item in queue_slice)
-            embed = discord.Embed(title=f'キュー[{i+1}/{PAGES}]', description=queue_description, color=0xffffff)
-            await ctx.channel.send(embed=embed)
+    # Show Queue
+    urls=urls[1:6]
+    PAGES = len(Utils.chunk_list(urls, 5))
+    for i in range(PAGES):
+        queue_slice = urls[i*10:(i+1)*10]
+        queue_description = '\n'.join(f'・[{Utils.get_title_url(item)}]({item})' for item in queue_slice)
+        embed = discord.Embed(title=f'次に再生する{len(urls)}曲', description=queue_description, color=0xffffff)
+        await ctx.channel.send(embed=embed)
 
     # Save Playlists Date
     if playlists is not None:

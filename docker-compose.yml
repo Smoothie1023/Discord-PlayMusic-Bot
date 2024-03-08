@@ -5,7 +5,7 @@ services:
     image: python:3.11.7
     build: .
     container_name: "playaudio"
-    working_dir: "/root/"
+    working_dir: "/root/src"
     tty: true
     volumes:
       - ./src:/root/src

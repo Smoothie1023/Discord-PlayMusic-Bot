@@ -28,9 +28,11 @@ RUN mkdir -p /root/DiscordTokens
 COPY ./DiscordTokens/ /root/DiscordTokens/
 
 # Package Install
-RUN pip install yt-dlp
+RUN pip install aiohttp
 RUN pip install discord.py
 RUN pip install niconico.py
+RUN pip install PyNaCl
 RUN pip install requests
+RUN pip install yt-dlp
 
 ENTRYPOINT ["python", "/root/src/main.py"]

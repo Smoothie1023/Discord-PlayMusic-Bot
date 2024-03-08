@@ -34,6 +34,7 @@ class Downloader:
 
     def __init__(self):
         """Initialize Downloader Class"""
+        self.niconico_videoID_patterns = re.compile(r'(sm|nm)(\d)*')
         self.logger = logger
         self.logger.debug('Downloader Class Initialized')
 
@@ -52,11 +53,11 @@ class Downloader:
         if 'nico' in url:
             nvideo = Nclient.video.get_video(url)
             nvideo.connect()
-            url=nvideo.download_link
+            url = nvideo.download_link
             self.logger.debug(f'NicoNico Streamming URL: {url}')
 
         with YoutubeDL(options) as ydl:
-            song = ydl.extract_info(url, download=False)
+            song = ydl.extract_info(url, download = False)
             self.logger.info(f'YoutubeDL Streamming Information: {song}')
         return song
 
@@ -119,8 +120,8 @@ class Downloader:
                 self.logger.critical(f'Exception: {e}')
                 return None
         elif 'nico' in source_url:
-            url=f"https://ext.nicovideo.jp/api/getthumbinfo/{self.GetVideoID(source_url)}"
-            res=requests.get(url)
+            url = f'https://ext.nicovideo.jp/api/getthumbinfo/{self.GetVideoID(source_url)}'
+            res = requests.get(url)
             return res.text[res.text.find("<title>")+7:res.text.rfind("</title>")]
 
     def GetVideoID(self,url:str) -> str:
@@ -151,9 +152,8 @@ class Downloader:
             self.logger.debug(f'Youtube Video ID: {result}')
             return result
         elif 'nico' in url:
-            pattern=re.compile(r'(sm|nm)(\d)*')
-            self.logger.debug(f'NicoNico Video ID: {pattern.search(url).group()}')
-            return pattern.search(url).group()
+            self.logger.debug(f'NicoNico Video ID: {self.niconico_videoID_patterns.search(url).group()}')
+            return self.niconico_videoID_patterns.search(url).group()
         elif 'twitter' in url:
             if '/video' in url:
                 result = url[url.rfind('status/')+7:url.rfind('/video')]

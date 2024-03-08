@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+import asyncio
 from functools import lru_cache
 import json
 import logging
@@ -7,14 +9,11 @@ from urllib.parse import urlparse
 from urllib.parse import parse_qs
 import urllib.request
 
+import aiohttp
 import requests
 from yt_dlp import YoutubeDL
 
 logger = logging.getLogger('PlayAudio')
-
-# Constants
-# Supported Websites
-SUPPORTED_WEBSITES = re.compile(r"youtube|youtu.be|nicovideo|nico|twitter|t.co|soundcloud.com|x|cdn.discordapp.com")
 
 class Utils:
     """Utils Class
@@ -24,64 +23,61 @@ class Utils:
         """Initialize Utils Class"""
         self.logger = logger
         self.logger.debug('Utils Class Initialized')
-        self.youtubeURLFormat = re.compile(r'https://(?:www\.)?youtube\.com/(?:[^/]+/)?(?:[^/]+/)?(?:watch\?v=)?([^/]+)')
+
+        # Regular Expression
+        # Supported Websites
+        self.SUPPORTED_WEBSITES = re.compile(r"youtube|youtu.be|nicovideo|nico|twitter|t.co|soundcloud.com|x|cdn.discordapp.com")
+        # Youtube URL Format
+        self.YOUTUBEURLFORMAT = re.compile(r'https://(?:www\.)?youtube\.com/(?:[^/]+/)?(?:[^/]+/)?(?:watch\?v=)?([^/]+)')
 
     def delete_space(self,urls:list) -> list:
         """Delete Space
         Note: This Function is used to delete space from URL
         """
         self.logger.debug(f'DeleteSpace:in:URLs: {urls}')
-        for i , url in enumerate(urls):
-            url = url.replace(' ','')
-            url = url.replace('　','')
-            urls[i] = url
-            if len(url) == 0:
-                urls.pop(i)
-        self.logger.debug(f'DeleteSpace:out:URLs: {urls}')
-        return urls
+        cleaned_urls = [url.replace(' ', '').replace('　', '') for url in urls if url.strip()]
+        self.logger.debug(f'DeleteSpace:out:URLs: {cleaned_urls}')
+        return cleaned_urls
 
     def check_url(self,urls:list) -> list:
         """Check URL
         Note: This Function is used to check URL
         """
+        valid_urls = []
         error = []
         self.logger.debug(f'Check URL: {urls}')
-        urls=[url for url in urls if "http" in url]
         with requests.Session() as session:
-            for index in range(len(urls)):
-                if SUPPORTED_WEBSITES.search(urls[index]) is None:
-                    error.append(f':warning:[この動画サイト]({urls[index]})は対応してません。')
-                    urls[index] = None
+            for url in urls:
+                if self.SUPPORTED_WEBSITES.search(url) is None:
+                    error.append(f':warning:[この動画サイト]({url})は対応してません。')
                     continue
-                if 't.co' in urls[index] or 'x.com' in urls[index]:
-                    urls[index] = session.get(urls[index]).url
-                if 'youtu' in urls[index]:
-                    if re.search(self.youtubeURLFormat, urls[index]):
-                        urls[index] = f'https://www.youtube.com/watch?v={re.search(self.youtubeURLFormat, urls[index]).group(1)}'
-                    if session.get(f'http://img.youtube.com/vi/{self.get_video_id(urls[index])}/mqdefault.jpg').status_code!=200:
-                        logger.warning(f'Youtube Video Not Found: {urls[index]}')
-                        error.append(f':warning:[こちらの動画]({urls[index]})は削除または非公開にされています。')
-                        urls[index] = None
+                if 't.co' in url or 'x.com' in urls:
+                    url = session.get(url).url
+                    print(url)
+                if 'youtu' in url:
+                    if self.YOUTUBEURLFORMAT.search(url):
+                        url = f'https://www.youtube.com/watch?v={self.YOUTUBEURLFORMAT.search(url).group(1)}'
+                    if session.get(f'http://img.youtube.com/vi/{self.get_video_id(url)}/mqdefault.jpg').status_code!=200:
+                        logger.warning(f'Youtube Video Not Found: {url}')
+                        error.append(f':warning:[こちらの動画]({url})は削除または非公開にされています。')
                         continue
-                    if self.is_music_premium_video(urls[index]):
-                        logger.warning(f'Youtube Music Premium Video: {urls[index]}')
-                        error.append(f':warning:[こちらの動画]({urls[index]})はYoutube Music Premiumの動画です。')
-                        urls[index] = None
+                    if self.is_music_premium_video(url):
+                        logger.warning(f'Youtube Music Premium Video: {url}')
+                        error.append(f':warning:[こちらの動画]({url})はYoutube Music Premiumの動画です。')
                         continue
-                    urls[index] = f'https://www.youtube.com/watch?v={self.get_video_id(urls[index])}'
-                if 'nicovideo' in urls[index]:
-                    if '?' in urls[index]:
-                        urls[index] = urls[index][:urls[index].find('?')]
-                if 'twitter' in urls[index]:
-                    if self.get_title_from_ytdlp(urls[index]) == "Not Found Video":
-                        logger.warning(f'Twitter Video Not Found: {urls[index]}')
-                        error.append(f':warning:[こちらのツイート]({urls[index]})から動画を取得できませんでした。')
-                        urls[index] = None
+                    url = f'https://www.youtube.com/watch?v={self.get_video_id(url)}'
+                if 'nicovideo' in url:
+                    if '?' in url:
+                        url = url[:url.find('?')]
+                if 'twitter' in url:
+                    if self.get_title_from_ytdlp(url) == "Not Found Video":
+                        logger.warning(f'Twitter Video Not Found: {url}')
+                        error.append(f':warning:[こちらのツイート]({url})から動画を取得できませんでした。')
                         continue
-            # Remove None from urls
-            urls = [url for url in urls if url is not None]
+                valid_urls.append(url)
+
             logger.debug(f'Check End URLs: {urls}')
-            return urls, error
+            return valid_urls, error
 
     @lru_cache(maxsize=500)
     def get_video_id(self, url:str) -> str:
