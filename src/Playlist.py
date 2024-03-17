@@ -2,8 +2,9 @@
 # -*- coding: utf-8 -*-
 import os
 import logging
-import json
 from datetime import datetime
+
+import orjson
 
 # Setup Logging
 logger = logging.getLogger('PlayAudio')
@@ -80,8 +81,9 @@ class Playlist:
 
     def save_playlists_date(self):
         """Save Playlists Date"""
-        with open(self.playlist_dates_path, 'w', encoding='utf-8') as f:
-            json.dump(self.playlist_dates, f, indent=2, ensure_ascii=False)
+        with open(self.playlist_dates_path, 'w', encoding = 'utf-8') as f:
+            f.write(orjson.dumps(self.playlist_dates,option=orjson.OPT_INDENT_2).decode('utf-8'))
+
             self.logger.info(self.playlist_dates)
             self.logger.info('Save Playlists Date')
 
@@ -89,7 +91,7 @@ class Playlist:
         """Load Playlists Date"""
         with open(self.playlist_dates_path, 'r', encoding='utf-8') as f:
             self.logger.info('Load Playlists Date')
-            return json.load(f)
+            return orjson.loads(f.read())
 
     def delete_playlists_date(self,playlist):
         """Delete Playlists Date

@@ -9,3 +9,12 @@ services:
     tty: true
     volumes:
       - ./src:/root/src
+      - DiscordBotVolume:/data/
+      - DiscordBotLogVolume:/Log/
+      - DiscordBotListsVolume:/Lists/
+    environment:
+      - TZ=Asia/Tokyo
+volumes:
+  DiscordBotVolume:
+  DiscordBotLogVolume:
+  DiscordBotListsVolume:

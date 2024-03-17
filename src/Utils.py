@@ -52,7 +52,9 @@ class Utils:
                     error.append(f':warning:[この動画サイト]({url})は対応してません。')
                     continue
                 if 't.co' in url or 'x.com' in urls:
-                    url = session.get(url).url
+                    res = session.get(url, allow_redirects = True)
+                    if res.history:
+                        url = res.url
                     print(url)
                 if 'youtu' in url:
                     if self.YOUTUBEURLFORMAT.search(url):

@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import json
 import logging
 import os
 import random
@@ -13,6 +12,7 @@ from discord import app_commands
 from discord.ext import tasks
 from discord.ui import Modal, View, text_input
 from niconico import NicoNico
+import orjson
 import requests
 
 import Downloader as Downloader
@@ -24,7 +24,7 @@ import Utils
 # Setup Logging
 logger = logging.getLogger('PlayAudio')
 logger.setLevel(logging.DEBUG)
-handler = logging.FileHandler('../Log/PlayAudio.log', encoding='utf-8')
+handler = logging.FileHandler('/Log/PlayAudio.log', encoding='utf-8')
 logger.addHandler(handler)
 fmt = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 handler.setFormatter(fmt)
@@ -42,9 +42,9 @@ NCLIENT = NicoNico()
 NEXT_SONG = None
 IS_LOOP = False
 # PlayList Path
-PLAYLIST_PATH = '../lists/'
+PLAYLIST_PATH = '/Lists/'
 # PlayList Dates Path
-PLAYLIST_DATES_PATH = '../playlist_date.json'
+PLAYLIST_DATES_PATH = '/data/playlist_date.json'
 
 # Discord Token Folder Path
 DISCORD_TOKEN_FOLDER_PATH = '../DiscordTokens/'
@@ -199,7 +199,6 @@ async def playlist_autocomplete(
     for file in files:
         file = file[:-5]
         if current.lower() in file.lower():
-            #data.append(app_commands.Choice(name = file, value = file))
             playlists.append(file)
             if len(data) > 24:
                 break
@@ -309,7 +308,7 @@ async def play(ctx:discord.Interaction, urls:str = None, playlists:str = None,
             if os.path.exists(f'{PLAYLIST_PATH}{playlist}.json'):
                 Playlist.record_play_date(f'{playlist}.json',datetime.now())
                 with open(f'{PLAYLIST_PATH}{playlist}.json','r',encoding='utf-8') as f:
-                    json_list = json.load(f)
+                    json_list = orjson.loads(f.read())
                     if urls is not None:
                         urls.extend(json_list['urls'])
                     else:
@@ -544,8 +543,9 @@ async def create_playlist(ctx:discord.Interaction, playlist:str, urls:str, locke
 
         json_list = {'owner':[ctx.user.id],'locked':locked,'urls':urls}
         try:
-            with open(f'{PLAYLIST_PATH}{playlist}.json','w',encoding='utf-8') as f:
-                json.dump(json_list,f,indent=2,ensure_ascii=False)
+            with open(f'{PLAYLIST_PATH}{playlist}.json','w', encoding = 'utf-8') as f:
+                f.write(orjson.dumps(json_list,option=orjson.OPT_INDENT_2).decode('utf-8'))
+
         except Exception as e:
             embed=discord.Embed(title = ':warning:使用できない文字が入っています、別の名前に変えてください。', color=0xffffff)
             await ctx.followup.send(embed=embed)
@@ -612,7 +612,7 @@ async def add_music_to_playlist(ctx:discord.Interaction, playlist:str, urls:str)
         return
 
     with open(f'{PLAYLIST_PATH}{playlist}.json','r',encoding='utf-8') as f:
-        json_list = json.load(f)
+        json_list = orjson.loads(f.read())
         if json_list['locked']:
             if ctx.user.id not in json_list['owner']:
                 embed = discord.Embed(title = f':warning:プレイリスト{playlist}は編集が禁止されています。', color = 0xffff00)
@@ -639,8 +639,9 @@ async def add_music_to_playlist(ctx:discord.Interaction, playlist:str, urls:str)
         return
 
     json_list['urls'].extend(urls)
-    with open(f'{PLAYLIST_PATH}{playlist}.json','w',encoding='utf-8') as f:
-        json.dump(json_list,f,indent=2,ensure_ascii=False)
+    with open(f'{PLAYLIST_PATH}{playlist}.json','w', encoding = 'utf-8') as f:
+        f.write(orjson.dumps(json_list,option=orjson.OPT_INDENT_2).decode('utf-8'))
+
     embed=discord.Embed(title=f'プレイリスト:{playlist}に曲を追加しました。',description='以下のURLをを追加しました。',color=0xffffff)
     Playlist.record_play_date(f'{playlist}.json',datetime.now())
     Playlist.save_playlists_date()
@@ -676,7 +677,7 @@ async def delete_playlist(ctx:discord.Interaction, playlist:str):
         return
 
     with open(f'{PLAYLIST_PATH}{playlist}.json','r',encoding='utf-8') as f:
-        json_list = json.load(f)
+        json_list = orjson.loads(f.read())
         if json_list['locked']:
             if ctx.user.id not in json_list['owner']:
                 embed = discord.Embed(title = f':warning:プレイリスト{playlist}は編集が禁止されています。', color = 0xffff00)
@@ -704,7 +705,7 @@ async def delete_music_from_playlist(ctx:discord.Interaction, playlist:str, urls
         urls = urls.split(',')
         urls = Utils.delete_space(urls)
         with open(f'{PLAYLIST_PATH}{playlist}.json','r',encoding='utf-8') as f:
-            json_list = json.load(f)
+            json_list = orjson.loads(f.read())
             if json_list['locked']:
                 if ctx.user.id not in json_list['owner']:
                     embed = discord.Embed(title = f':warning:プレイリスト{playlist}は編集が禁止されています。', color = 0xffff00)
@@ -730,8 +731,9 @@ async def delete_music_from_playlist(ctx:discord.Interaction, playlist:str, urls
             logger.warning('Playlist is empty and deleted.')
             return
 
-        with open(f'{PLAYLIST_PATH}{playlist}.json','w',encoding='utf-8') as f:
-            json.dump(json_list,f,indent=2,ensure_ascii=False)
+        with open(f'{PLAYLIST_PATH}{playlist}.json','w', encoding = 'utf-8') as f:
+            f.write(orjson.dumps(json_list,option=orjson.OPT_INDENT_2).decode('utf-8'))
+
         embed = discord.Embed(title = f'プレイリスト:{playlist}から曲を削除しました。', description='削除後のプレイリストの曲一覧はこちらです。', color = 0xffffff)
         await ctx.response.send_message(embed = embed)
         logger.info(f'Delete Music from Playlist: {playlist}')
@@ -818,7 +820,7 @@ async def show_music_from_playlist(ctx:discord.Interaction, playlist:str):
         await ctx.response.send_message(embed = embed)
         return
     with open(f'{PLAYLIST_PATH}{playlist}.json','r',encoding='utf-8') as f:
-        json_list = json.load(f)
+        json_list = orjson.loads(f.read())
         embed = discord.Embed(title = f'プレイリスト:{playlist}に登録されている曲一覧', color = 0xffffff)
         await ctx.response.send_message(embed = embed)
         # Show Queue
@@ -848,15 +850,16 @@ async def change_playlist_lock(ctx:discord.Interaction, playlist:str, locked:boo
         return
     await ctx.response.defer()
     with open(f'{PLAYLIST_PATH}{playlist}.json','r',encoding='utf-8') as f:
-        json_list = json.load(f)
+        json_list = orjson.loads(f.read())
     if ctx.user.id not in json_list['owner']:
         embed = discord.Embed(title = f':warning:プレイリストの編集ロックを変更できるのは作成者のみです。', color = 0xff0000)
         await ctx.followup.send(embed = embed)
         logger.warning('Playlist is locked')
         return
     json_list['locked'] = locked
-    with open(f'{PLAYLIST_PATH}{playlist}.json','w',encoding='utf-8') as f:
-        json.dump(json_list,f,indent=2,ensure_ascii=False)
+    with open(f'{PLAYLIST_PATH}{playlist}.json','w', encoding = 'utf-8') as f:
+        f.write(orjson.dumps(json_list,option=orjson.OPT_INDENT_2).decode('utf-8'))
+
         result =  'ロックを有効化しました。' if locked else 'ロックを無効化しました。'
         embed = discord.Embed(title = f'プレイリスト:{playlist}の編集{result}', color = 0xffffff)
     await ctx.followup.send(embed = embed)
@@ -884,7 +887,7 @@ async def join_playlist(ctx:discord.Interaction, parent_playlist:str, child_play
         return
     await ctx.response.defer()
     with open(f'{PLAYLIST_PATH}{parent_playlist}.json','r',encoding='utf-8') as f:
-        parent_json = json.load(f)
+        parent_json = orjson.loads(f.read())
     if parent_json['locked']:
         if ctx.user.id not in parent_json['owner']:
             embed = discord.Embed(title = f':warning:プレイリスト{parent_playlist}は編集が禁止されています。', color = 0xffff00)
@@ -892,7 +895,7 @@ async def join_playlist(ctx:discord.Interaction, parent_playlist:str, child_play
             logger.warning('Playlist is locked')
             return
     with open(f'{PLAYLIST_PATH}{child_playlist}.json','r',encoding='utf-8') as f:
-        child_json = json.load(f)
+        child_json = orjson.loads(f.read())
 
     skip_urls = []
 
@@ -914,8 +917,9 @@ async def join_playlist(ctx:discord.Interaction, parent_playlist:str, child_play
         return
 
     json_list = {'owner':parent_json['owner'],'locked':parent_json['locked'],'urls':parent_json['urls']}
-    with open(f'{PLAYLIST_PATH}{parent_playlist}.json','w',encoding='utf-8') as f:
-        json.dump(json_list,f,indent=2,ensure_ascii=False)
+    with open(f'{PLAYLIST_PATH}{parent_json}.json','w', encodin = 'utf-8') as f:
+        f.write(orjson.dumps(json_list,option=orjson.OPT_INDENT_2).decode('utf-8'))
+
     embed = discord.Embed(title = f'プレイリスト:{child_playlist}を{parent_playlist}に結合しました。', color = 0xffffff)
     await ctx.followup.send(embed = embed)
 

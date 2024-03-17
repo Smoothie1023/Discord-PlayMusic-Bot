@@ -1,10 +1,10 @@
 import logging
-import json
 import urllib.request
 from urllib.parse import urlparse, parse_qs
 import re
 import requests
 
+import orjson
 from yt_dlp import YoutubeDL
 from niconico import NicoNico
 
@@ -85,7 +85,7 @@ class Downloader:
             try:
                 with urllib.request.urlopen(url) as response:
                     response_text = response.read()
-                    data = json.loads(response_text.decode())
+                    data = orjson.loads(response_text.decode())
                     if(options == 'title'):
                         title = data['title']
                         self.logger.info(f'Title: {title}')
