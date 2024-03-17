@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-import asyncio
 from functools import lru_cache
 import json
 import logging
@@ -9,11 +8,11 @@ from urllib.parse import urlparse
 from urllib.parse import parse_qs
 import urllib.request
 
-import aiohttp
 import requests
 from yt_dlp import YoutubeDL
 
 logger = logging.getLogger('PlayAudio')
+
 
 class Utils:
     """Utils Class
@@ -26,11 +25,13 @@ class Utils:
 
         # Regular Expression
         # Supported Websites
-        self.SUPPORTED_WEBSITES = re.compile(r"youtube|youtu.be|nicovideo|nico|twitter|t.co|soundcloud.com|x|cdn.discordapp.com")
+        self.SUPPORTED_WEBSITES = \
+            re.compile(r"youtube|youtu.be|nicovideo|nico|twitter|t.co|soundcloud.com|x|cdn.discordapp.com")
         # Youtube URL Format
-        self.YOUTUBEURLFORMAT = re.compile(r'https://(?:www\.)?youtube\.com/(?:[^/]+/)?(?:[^/]+/)?(?:watch\?v=)?([^/]+)')
+        self.YOUTUBEURLFORMAT = \
+            re.compile(r'https://(?:www\.)?youtube\.com/(?:[^/]+/)?(?:[^/]+/)?(?:watch\?v=)?([^/]+)')
 
-    def delete_space(self,urls:list) -> list:
+    def delete_space(self, urls: list) -> list:
         """Delete Space
         Note: This Function is used to delete space from URL
         """
@@ -39,7 +40,7 @@ class Utils:
         self.logger.debug(f'DeleteSpace:out:URLs: {cleaned_urls}')
         return cleaned_urls
 
-    def check_url(self,urls:list) -> list:
+    def check_url(self, urls: list) -> list:
         """Check URL
         Note: This Function is used to check URL
         """
@@ -52,14 +53,15 @@ class Utils:
                     error.append(f':warning:[この動画サイト]({url})は対応してません。')
                     continue
                 if 't.co' in url or 'x.com' in urls:
-                    res = session.get(url, allow_redirects = True)
+                    res = session.get(url, allow_redirects=True)
                     if res.history:
                         url = res.url
                     print(url)
                 if 'youtu' in url:
                     if self.YOUTUBEURLFORMAT.search(url):
                         url = f'https://www.youtube.com/watch?v={self.YOUTUBEURLFORMAT.search(url).group(1)}'
-                    if session.get(f'http://img.youtube.com/vi/{self.get_video_id(url)}/mqdefault.jpg').status_code!=200:
+                    video_id = self.get_video_id(url)
+                    if session.get(f'http://img.youtube.com/vi/{video_id}/mqdefault.jpg').status_code != 200:
                         logger.warning(f'Youtube Video Not Found: {url}')
                         error.append(f':warning:[こちらの動画]({url})は削除または非公開にされています。')
                         continue
@@ -67,7 +69,7 @@ class Utils:
                         logger.warning(f'Youtube Music Premium Video: {url}')
                         error.append(f':warning:[こちらの動画]({url})はYoutube Music Premiumの動画です。')
                         continue
-                    url = f'https://www.youtube.com/watch?v={self.get_video_id(url)}'
+                    url = f'https://www.youtube.com/watch?v={video_id}'
                 if 'nicovideo' in url:
                     if '?' in url:
                         url = url[:url.find('?')]
@@ -82,7 +84,7 @@ class Utils:
             return valid_urls, error
 
     @lru_cache(maxsize=500)
-    def get_video_id(self, url:str) -> str:
+    def get_video_id(self, url: str) -> str:
         """
         Get Video ID from URL
         Args:
@@ -129,7 +131,7 @@ class Utils:
             return "None"
 
     @lru_cache(maxsize=500)
-    def is_music_premium_video(self, url:str) -> bool:
+    def is_music_premium_video(self, url: str) -> bool:
         """Check if the video is music premium
         Args:
             url (str): URL
@@ -144,7 +146,7 @@ class Utils:
             return False
 
     @lru_cache(maxsize=500)
-    def get_title_from_ytdlp(self, url:str) -> str:
+    def get_title_from_ytdlp(self, url: str) -> str:
         """Get Tweet Video URL
         Args:
             url (str): URL
@@ -152,19 +154,19 @@ class Utils:
             str: Title
         """
         try:
-            ydl_opts={
-                'skip_download':True,
+            ydl_opts = {
+                'skip_download': True,
             }
             with YoutubeDL(ydl_opts) as ydl:
-                title=ydl.extract_info(url,download=False)
-        except:
+                title = ydl.extract_info(url, download=False)
+        except Exception:
             logger.warning(f'Not Found Title Video from ytdlp: {url}')
             return 'Not Found Video'
         else:
             return title['title']
 
     @lru_cache(maxsize=500)
-    def get_title_url(self, url:str) -> str:
+    def get_title_url(self, url: str) -> str:
         """Get Title URL
         Args:
             url (str): URL
@@ -182,7 +184,7 @@ class Utils:
                     response_text = response.read()
                     data = json.loads(response_text.decode())
                     return data['title']
-            except urllib.error.HTTPError as e:
+            except urllib.error.HTTPError:
                 return self.get_title_from_ytdlp(url)
         if 'nico' in url:
             url = f'https://ext.nicovideo.jp/api/getthumbinfo/{self.get_video_id(url)}'
@@ -190,7 +192,7 @@ class Utils:
             return res.text[res.text.find('<title>')+7:res.text.find('</title>')]
         return self.get_title_from_ytdlp(url)
 
-    def chunk_list(self, urls:list, size:int)-> list:
+    def chunk_list(self, urls: list, size: int) -> list:
         """Chunk List
         Note: This Function is used to chunk list
 

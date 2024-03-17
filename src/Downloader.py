@@ -13,6 +13,7 @@ logger = logging.getLogger('PlayAudio')
 # Initialize NicoNico
 Nclient = NicoNico()
 
+
 class Downloader:
     """Download from URL Class
     Note: This Class is used to download from URL
@@ -38,7 +39,7 @@ class Downloader:
         self.logger = logger
         self.logger.debug('Downloader Class Initialized')
 
-    def streamming_youtubedl(self, url:str,options:list = ydl_opts_default) -> dict:
+    def streamming_youtubedl(self, url: str, options: list = ydl_opts_default) -> dict:
         """Streamming from YoutubeDL
         Note: This Function is used to get streamming Video from YoutubeDL
 
@@ -57,11 +58,11 @@ class Downloader:
             self.logger.debug(f'NicoNico Streamming URL: {url}')
 
         with YoutubeDL(options) as ydl:
-            song = ydl.extract_info(url, download = False)
+            song = ydl.extract_info(url, download=False)
             self.logger.info(f'YoutubeDL Streamming Information: {song}')
         return song
 
-    def get_info(self, source_url:str, options:str) -> str:
+    def get_info(self, source_url: str, options: str) -> str:
         """Get Info from URL
         Note: This Function is used to get info from URL
 
@@ -86,7 +87,7 @@ class Downloader:
                 with urllib.request.urlopen(url) as response:
                     response_text = response.read()
                     data = orjson.loads(response_text.decode())
-                    if(options == 'title'):
+                    if (options == 'title'):
                         title = data['title']
                         self.logger.info(f'Title: {title}')
                         return title
@@ -105,7 +106,7 @@ class Downloader:
                 except Exception as e:
                     self.logger.error(f'streamming_youtubedl Exception: {e}')
                     return None
-                if(options == 'title'):
+                if (options == 'title'):
                     title = info['title']
                     self.logger.info(f'Title: {title}')
                     return title
@@ -124,7 +125,7 @@ class Downloader:
             res = requests.get(url)
             return res.text[res.text.find("<title>")+7:res.text.rfind("</title>")]
 
-    def GetVideoID(self,url:str) -> str:
+    def GetVideoID(self, url: str) -> str:
         """Get Video ID from URL
 
         Args:
@@ -136,7 +137,7 @@ class Downloader:
         """
         self.logger.info(f'Get Video ID from URL: {url}')
         if 't.co' in url:
-            url=requests.get(url).url
+            url = requests.get(url).url
             self.logger.debug(f'Convert t.co URL: {url}')
         if 'youtu.be' in url:
             result = urlparse(url).path

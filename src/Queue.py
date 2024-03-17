@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-from typing import Tuple
 import logging
 
 logger = logging.getLogger('PlayAudio')
+
 
 class Queue:
     """Queue Class
@@ -16,7 +16,7 @@ class Queue:
         self.queue = []
         self.now_playing = None
 
-    def add_queue(self, urls:list) -> list:
+    def add_queue(self, urls: list) -> list:
         """Add Queue
         Note: This Function is used to add Queue
 
@@ -41,7 +41,7 @@ class Queue:
         self.logger.debug(f'Clear_Queue: {self.queue}')
         return self.queue
 
-    def skip_queue(self, index:int) -> None:
+    def skip_queue(self, index: int) -> None:
         """Skip Queue
         Note: This Function is used to skip Queue
 

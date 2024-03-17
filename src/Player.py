@@ -2,12 +2,12 @@
 # -*- coding: utf-8 -*-
 import logging
 
-from niconico import NicoNico
 from yt_dlp import YoutubeDL
 
 import Queue
 
 logger = logging.getLogger('PlayAudio')
+
 
 class Player:
     """
