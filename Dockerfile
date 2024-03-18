@@ -18,9 +18,9 @@ RUN apt-get update && apt-get -y upgrade -y && \
   apt-get -y install ffmpeg vim less && \
   pip install --upgrade pip && \
   pip install --upgrade setuptools && \
-  mkdir -p /root/DiscordTokens && \
   pip install aiohttp discord.py niconico.py orjson PyNaCl requests yt-dlp
 
+RUN mkdir -p /root/DiscordTokens
 COPY ./DiscordTokens/ /root/DiscordTokens/
 
 ENTRYPOINT ["python", "/root/src/main.py"]
