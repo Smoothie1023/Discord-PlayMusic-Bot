@@ -18,3 +18,4 @@ volumes:
   DiscordBotVolume:
   DiscordBotLogVolume:
   DiscordBotListsVolume:
+x-project-name: PlayAudio
