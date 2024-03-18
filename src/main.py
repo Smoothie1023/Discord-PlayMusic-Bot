@@ -996,7 +996,7 @@ async def play_error(ctx: discord.Interaction, error):
     description='件数を指定してログを表示します。'
 )
 async def log(ctx: discord.Interaction, num: int):
-    with open('Log/PlayAudio.log', 'r', encoding='utf-8') as f:
+    with open('/Log/PlayAudio.log', 'r', encoding='utf-8') as f:
         lines = f.readlines()
         lines = lines[-num:]
         lines = ''.join(lines)
