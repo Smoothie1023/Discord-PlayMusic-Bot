@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import logging
+from logging.handlers import RotatingFileHandler
 import os
 import random
 import time
@@ -23,8 +24,9 @@ import Utils
 # Setup Logging
 logger = logging.getLogger('PlayAudio')
 logger.setLevel(logging.DEBUG)
-handler = logging.FileHandler('/Log/PlayAudio.log', encoding='utf-8')
-logger.addHandler(handler)
+handler = RotatingFileHandler('/Log/PlayAudio.log', maxBytes=2000, backupCount=10, encoding='utf-8')
+handler.setLevel(logging.DEBUG)
+
 fmt = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 handler.setFormatter(fmt)
 
@@ -995,17 +997,9 @@ async def play_error(ctx: discord.Interaction, error):
     name='log',
     description='件数を指定してログを表示します。'
 )
-async def log(ctx: discord.Interaction, num: int):
-    with open('/Log/PlayAudio.log', 'r', encoding='utf-8') as f:
-        lines = f.readlines()
-        lines = lines[-num:]
-        lines = ''.join(lines)
-
-        # limit 2000 characters
-        if len(lines) > 2000:
-            lines = lines[-2000:]
-
-        await ctx.response.send_message(lines)
+async def log(ctx: discord.Interaction):
+    embed = discord.Embed(title='ログを出力します。', color=0xffffff)
+    await ctx.response.send_message(embeds=embed, file=discord.File('/Log/PlayAudio.log'))
 
 
 # Disconnect Bot Command
