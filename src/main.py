@@ -21,6 +21,9 @@ import Playlist
 import Queue
 import Utils
 
+# Global Variables
+global NEXT_SONG
+global IS_LOOP
 # Constants
 # Discord Bot Initialize
 client = discord.Client(intents=discord.Intents.default())
@@ -46,9 +49,6 @@ handler.setFormatter(fmt)
 
 logger.info('Starting PlayAudio')
 
-# Global Variables
-global NEXT_SONG
-global IS_LOOP
 
 # Discord Token Folder Path
 DISCORD_TOKEN_FOLDER_PATH = '../DiscordTokens/'
