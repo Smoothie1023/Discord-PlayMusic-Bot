@@ -38,7 +38,7 @@ LOG_PATH = '/Log/PlayAudio.log'
 # Setup Logging
 logger = logging.getLogger('PlayAudio')
 logger.setLevel(logging.DEBUG)
-handler = RotatingFileHandler(LOG_PATH, maxBytes=2000, backupCount=10, encoding='utf-8')
+handler = RotatingFileHandler(LOG_PATH, maxBytes=8*1024*1024, backupCount=10, encoding='utf-8')
 handler.setLevel(logging.DEBUG)
 
 # Create a logging format
