@@ -999,7 +999,7 @@ async def play_error(ctx: discord.Interaction, error):
 )
 async def log(ctx: discord.Interaction):
     embed = discord.Embed(title='ログを出力します。', color=0xffffff)
-    await ctx.response.send_message(embeds=embed, file=discord.File('/Log/PlayAudio.log'))
+    await ctx.response.send_message(embed=embed, file=discord.File('/Log/PlayAudio.log'))
 
 
 # Disconnect Bot Command
