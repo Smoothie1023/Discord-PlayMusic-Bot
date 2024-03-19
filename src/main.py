@@ -304,6 +304,11 @@ async def play(ctx: discord.Interaction, urls: str = None, playlists: str = None
 
     await ctx.response.defer()
 
+    if not ctx.guild.voice_client:
+        # Connect to Voice Channel
+        await ctx.user.voice.channel.connect()
+        logger.debug('Connected to Voice Channel')
+
     # Select URL Option
     if urls is not None:
         logger.debug('URL is not None')
@@ -363,11 +368,6 @@ async def play(ctx: discord.Interaction, urls: str = None, playlists: str = None
         await ctx.followup.send(embed=embed)
         logger.warning('URL does not exist')
         return
-
-    if not ctx.guild.voice_client:
-        # Connect to Voice Channel
-        await ctx.user.voice.channel.connect()
-        logger.debug('Connected to Voice Channel')
 
     # if shuffle is not None shuffle urls
     if shuffle is not None:
