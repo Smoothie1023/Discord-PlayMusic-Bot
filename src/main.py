@@ -25,9 +25,6 @@ import Utils
 global NEXT_SONG
 global IS_LOOP
 # Constants
-# Discord Bot Initialize
-client = discord.Client(intents=discord.Intents.default())
-tree = discord.app_commands.CommandTree(client)
 NCLIENT = NicoNico()
 NEXT_SONG = None
 IS_LOOP = False
@@ -47,12 +44,16 @@ handler.setLevel(logging.DEBUG)
 # Create a logging format
 fmt = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 handler.setFormatter(fmt)
+logger.addHandler(handler)
 
 # Change Permission
 os.chmod(LOG_PATH, 0o666)
 
 logger.info('Starting PlayAudio')
 
+# Discord Bot Initialize
+client = discord.Client(intents=discord.Intents.default())
+tree = discord.app_commands.CommandTree(client)
 
 # Discord Token Folder Path
 DISCORD_TOKEN_FOLDER_PATH = '../DiscordTokens/'
