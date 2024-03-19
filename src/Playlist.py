@@ -86,9 +86,9 @@ class Playlist:
         """Save Playlists Date"""
         with open(self.playlist_dates_path, 'w', encoding='utf-8') as f:
             f.write(orjson.dumps(self.playlist_dates, option=orjson.OPT_INDENT_2).decode('utf-8'))
-
             self.logger.info(self.playlist_dates)
             self.logger.info('Save Playlists Date')
+        os.chmod(self.playlist_dates_path, 0o666)
 
     def load_playlists_date(self):
         """Load Playlists Date"""

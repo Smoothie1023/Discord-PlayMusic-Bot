@@ -44,8 +44,12 @@ logger.setLevel(logging.DEBUG)
 handler = RotatingFileHandler(LOG_PATH, maxBytes=2000, backupCount=10, encoding='utf-8')
 handler.setLevel(logging.DEBUG)
 
+# Create a logging format
 fmt = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 handler.setFormatter(fmt)
+
+# Change Permission
+os.chmod(LOG_PATH, 0o666)
 
 logger.info('Starting PlayAudio')
 
@@ -565,6 +569,9 @@ async def create_playlist(ctx: discord.Interaction, playlist: str, urls: str, lo
         try:
             with open(f'{PLAYLIST_PATH}{playlist}.json', 'w', encoding='utf-8') as f:
                 f.write(orjson.dumps(json_list, option=orjson.OPT_INDENT_2).decode('utf-8'))
+
+            # Change Permission
+            os.chmod(f'{PLAYLIST_PATH}{playlist}.json', 0o666)
 
         except Exception as e:
             embed = discord.Embed(title=':warning:使用できない文字が入っています、別の名前に変えてください。', color=0xffffff)

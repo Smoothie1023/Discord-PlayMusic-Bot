@@ -9,8 +9,6 @@ services:
     tty: true
     volumes:
       - ./src:/root/src
-      - /etc/passwd:/etc/passwd:ro
-      - /etc/group:/etc/group:ro
       - DiscordBotVolume:/data/
       - DiscordBotLogVolume:/Log/
       - DiscordBotListsVolume:/Lists/
