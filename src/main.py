@@ -21,20 +21,6 @@ import Playlist
 import Queue
 import Utils
 
-# Setup Logging
-logger = logging.getLogger('PlayAudio')
-logger.setLevel(logging.DEBUG)
-handler = RotatingFileHandler('/Log/PlayAudio.log', maxBytes=2000, backupCount=10, encoding='utf-8')
-handler.setLevel(logging.DEBUG)
-
-fmt = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-handler.setFormatter(fmt)
-
-logger.info('Starting PlayAudio')
-
-# Global Variables
-global NEXT_SONG
-global IS_LOOP
 # Constants
 # Discord Bot Initialize
 client = discord.Client(intents=discord.Intents.default())
@@ -46,6 +32,23 @@ IS_LOOP = False
 PLAYLIST_PATH = '/Lists/'
 # PlayList Dates Path
 PLAYLIST_DATES_PATH = '/data/playlist_date.json'
+# Log Path
+LOG_PATH = '/Log/PlayAudio.log'
+
+# Setup Logging
+logger = logging.getLogger('PlayAudio')
+logger.setLevel(logging.DEBUG)
+handler = RotatingFileHandler(LOG_PATH, maxBytes=2000, backupCount=10, encoding='utf-8')
+handler.setLevel(logging.DEBUG)
+
+fmt = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(fmt)
+
+logger.info('Starting PlayAudio')
+
+# Global Variables
+global NEXT_SONG
+global IS_LOOP
 
 # Discord Token Folder Path
 DISCORD_TOKEN_FOLDER_PATH = '../DiscordTokens/'
@@ -995,11 +998,11 @@ async def play_error(ctx: discord.Interaction, error):
 @tree.command(
     guild=GUILD,
     name='log',
-    description='件数を指定してログを表示します。'
+    description='最新のログファイルを送付します。'
 )
 async def log(ctx: discord.Interaction):
     embed = discord.Embed(title='ログを出力します。', color=0xffffff)
-    await ctx.response.send_message(embed=embed, file=discord.File('/Log/PlayAudio.log'))
+    await ctx.response.send_message(embed=embed, file=discord.File(LOG_PATH))
 
 
 # Disconnect Bot Command
