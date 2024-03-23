@@ -9,6 +9,14 @@
 
 このBotはDiscord.py、yt-dlpを使ってボイスチャンネルにて動画の音声を流すことができるBotです。
 
+## 動作に必要なファイル
+
+DiscordTokens/
+┣channel_id.txt
+┣guild_id.txt
+┣token.txt
+┗vc_channel_id.txt
+
 ## コマンド一覧
 
 ### /play [URL] [プレイリスト名] [シャッフル再生]
