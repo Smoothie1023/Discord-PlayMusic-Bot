@@ -11,11 +11,11 @@
 
 ## 動作に必要なファイル
 
-DiscordTokens/
-┣channel_id.txt
-┣guild_id.txt
-┣token.txt
-┗vc_channel_id.txt
+DiscordTokens/  
+┣channel_id.txt  
+┣guild_id.txt  
+┣token.txt  
+┗vc_channel_id.txt  
 
 ## コマンド一覧
 
