@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 from urllib.parse import parse_qs
 import urllib.request
 
+import discord
 import requests
 from yt_dlp import YoutubeDL
 
@@ -203,3 +204,20 @@ class Utils:
             list: List of URL
         """
         return [urls[i:i+size] for i in range(0, len(urls), size)]
+
+    def create_queue_embed(self, urls: list, title: str, footer: str = None, addPages: bool = None,
+                           getTitle: bool = True) -> discord.Embed:
+        PAGES = len(self.chunk_list(urls, 10))
+        for i in range(PAGES):
+            queue_slice = urls[i*10:(i+1)*10]
+            # Add Page Number to Title
+            if addPages:
+                title += f'{i+1}/{PAGES}'
+            # Get title from URL
+            if getTitle:
+                queue_description = '\n'.join(f'[{self.get_title_url(item)}]({item})' for item in queue_slice)
+            else:
+                queue_description = '\n'.join(f'・{item}' for item in queue_slice)
+            embed = discord.Embed(title=title, description=queue_description, color=0xffffff)
+            embed.set_footer(text=footer)
+            return embed

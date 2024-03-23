@@ -388,18 +388,15 @@ async def play(ctx: discord.Interaction, urls: str = None, playlists: str = None
             embed.set_footer(text=f'他{len(urls)-1}曲はキューに追加しました。')
         await ctx.followup.send(embed=embed)
         play_music(vc)
+
     else:
         embed = discord.Embed(description=f'{len(urls)}曲をキューに追加しました。', color=0xffffff)
         await ctx.followup.send(embed=embed)
 
     # Show Queue
-    urls = urls[1:6]
-    PAGES = len(Utils.chunk_list(urls, 5))
-    for i in range(PAGES):
-        queue_slice = urls[i*10:(i+1)*10]
-        queue_description = '\n'.join(f'・[{Utils.get_title_url(item)}]({item})' for item in queue_slice)
-        embed = discord.Embed(title=f'次に再生する{len(urls)}曲', description=queue_description, color=0xffffff)
-        await ctx.channel.send(embed=embed)
+    (urls[1:6] if len(urls) > 1 else urls)[0]
+    embed = Utils.create_queue_embed(urls, title='キューに追加された曲一覧', footer=f'プレイリストに追加された曲数:{len(urls)}曲', addPages=True)
+    await ctx.channel.send(embed=embed)
 
     # Save Playlists Date
     if playlists is not None:
@@ -426,12 +423,8 @@ async def queue(ctx: discord.Interaction):
         await ctx.response.send_message(embed=embed)
 
         # Show Queue
-        PAGES = len(Utils.chunk_list(Queue.get_queue(), 10))
-        for i in range(PAGES):
-            queue_slice = Queue.get_queue()[i*10:(i+1)*10]
-            queue_description = '\n'.join(f'[{Utils.get_title_url(item)}]({item})' for item in queue_slice)
-            embed = discord.Embed(title=f'キュー[{i+1}/{PAGES}]', description=queue_description, color=0xffffff)
-            await ctx.channel.send(embed=embed)
+        embed = Utils.create_queue_embed(Queue.get_queue(), title='キュー一覧', addPages=True)
+        await ctx.channel.send(embed=embed)
     else:
         embed = discord.Embed(title=':warning:キューに曲が入っていません。', color=0xffff00)
         await ctx.response.send_message(embed=embed)
@@ -587,14 +580,8 @@ async def create_playlist(ctx: discord.Interaction, playlist: str, urls: str, lo
         logger.info(f'Create Playlist: {playlist}')
 
         # Show Queue
-        PAGES = len(Utils.chunk_list(urls, 10))
-        for i in range(PAGES):
-            queue_slice = urls[i*10:(i+1)*10]
-            queue_description = '\n'.join(f'[{Utils.get_title_url(item)}]({item})' for item in queue_slice)
-            embed = discord.Embed(title=f'プレイリスト:{playlist}の曲の一覧{i+1}/{PAGES}',
-                                  description=queue_description, color=0xffffff)
-            embed.set_footer(text=f'プレイリストに登録された曲数:{len(urls)}曲')
-            await ctx.channel.send(embed=embed)
+        embed = Utils.create_queue_embed(urls, f'プレイリスト:{playlist}の曲の一覧', f'プレイリストに追加された曲数:{len(urls)}曲')
+        await ctx.channel.send(embed=embed)
 
 
 # Add music to Playlist Command
@@ -682,14 +669,9 @@ async def add_music_to_playlist(ctx: discord.Interaction, playlist: str, urls: s
     await ctx.followup.send(embed=embed)
 
     # Show Queue
-    PAGES = len(Utils.chunk_list(urls, 10))
-    for i in range(PAGES):
-        queue_slice = urls[i*10:(i+1)*10]
-        queue_description = '\n'.join(f'[{Utils.get_title_url(item)}]({item})' for item in queue_slice)
-        embed = discord.Embed(
-            title=f'プレイリスト:{playlist}の曲の一覧{i+1}/{PAGES}', description=queue_description, color=0xffffff)
-        embed.set_footer(text=f'プレイリストに追加された曲数:{len(urls)}曲')
-        await ctx.channel.send(embed=embed)
+    embed = Utils.create_queue_embed(urls, title=f'プレイリスト:{playlist}の曲の一覧',
+                                     footer=f'プレイリストに追加された曲数:{len(urls)}曲', addPages=True)
+    await ctx.channel.send(embed=embed)
 
 
 # Delete Playlist Command
@@ -775,14 +757,9 @@ async def delete_music_from_playlist(ctx: discord.Interaction, playlist: str, ur
         Playlist.save_playlists_date()
 
         # Show Queue
-        PAGES = len(Utils.chunk_list(json_list['urls'], 10))
-        for i in range(PAGES):
-            queue_slice = json_list['urls'][i*10:(i+1)*10]
-            queue_description = '\n'.join(f'[{Utils.get_title_url(item)}]({item})' for item in queue_slice)
-            embed = discord.Embed(
-                title=f'プレイリスト:{playlist}の曲の一覧{i+1}/{PAGES}', description=queue_description, color=0xffffff)
-            embed.set_footer(text=f'プレイリストに登録された曲数:{len(json_list["urls"])}曲')
-            await ctx.channel.send(embed=embed)
+        embed = Utils.create_queue_embed(json_list["urls"], title=f'プレイリスト:{playlist}の曲の一覧',
+                                         footer=f'プレイリストに登録された曲数:{len(json_list["urls"])}曲', addPages=True)
+        await ctx.channel.send(embed=embed)
 
 
 # Rename Playlist Command
@@ -820,7 +797,8 @@ async def rename_playlist(ctx: discord.Interaction, playlist: str, new_playlist:
     description='登録されているプレイリスト一覧を表示します。'
 )
 async def show_playlist(ctx: discord.Interaction):
-    lists = os.listdir(PLAYLIST_PATH)
+    # lists = os.listdir(PLAYLIST_PATH)
+    lists = [os.path.splitext(file)[0] for file in os.listdir(PLAYLIST_PATH) if file.endswith('.json')]
     logger.debug(f'Playlist Files: {lists}')
     if lists == []:
         embed = discord.Embed(title=':warning:登録されているプレイリストが存在しません。', color=0xffff00)
@@ -830,13 +808,10 @@ async def show_playlist(ctx: discord.Interaction):
     embed = discord.Embed(title='登録されているプレイリスト一覧を表示します。', color=0xffffff)
     await ctx.response.send_message(embed=embed)
     # Show Playlist
-    PAGES = len(Utils.chunk_list(lists, 10))
-    for i in range(PAGES):
-        queue_slice = lists[i*10:(i+1)*10]
-        queue_description = '\n'.join(f'・{item}' for item in queue_slice)
-        embed = discord.Embed(title=f'登録されているプレイリスト一覧{i+1}/{PAGES}', description=queue_description, color=0xffffff)
-        embed.set_footer(text=f'登録されているプレイリスト数:{len(lists)}')
-        await ctx.channel.send(embed=embed)
+    embed = Utils.create_queue_embed(lists, title='登録されているプレイリスト一覧',
+                                     footer=f'登録されているプレイリスト数:{len(lists)}',
+                                     addPages=True, getTitle=False)
+    await ctx.channel.send(embed=embed)
     logger.info('Show Playlist Command')
 
 
@@ -859,15 +834,11 @@ async def show_music_from_playlist(ctx: discord.Interaction, playlist: str):
         json_list = orjson.loads(f.read())
         embed = discord.Embed(title=f'プレイリスト:{playlist}に登録されている曲一覧', color=0xffffff)
         await ctx.response.send_message(embed=embed)
+
         # Show Queue
-        PAGES = len(Utils.chunk_list(json_list['urls'], 10))
-        for i in range(PAGES):
-            queue_slice = json_list['urls'][i*10:(i+1)*10]
-            queue_description = '\n'.join(f'[{Utils.get_title_url(item)}]({item})' for item in queue_slice)
-            embed = discord.Embed(
-                title=f'プレイリスト:{playlist}の曲の一覧{i+1}/{PAGES}', description=queue_description, color=0xffffff)
-            embed.set_footer(text=f'プレイリストに登録された曲数:{len(json_list["urls"])}曲')
-            await ctx.channel.send(embed=embed)
+        embed = Utils.create_queue_embed(json_list['urls'], title=f'プレイリスト:{playlist}の曲の一覧',
+                                         footer=f'プレイリストに登録された曲数:{len(json_list["urls"])}曲', addPages=True)
+        await ctx.channel.send(embed=embed)
 
 
 # Change Playlist Lock Command
@@ -943,9 +914,9 @@ async def join_playlist(ctx: discord.Interaction, parent_playlist: str, child_pl
     for url in child_json['urls'][:]:
         if url not in parent_json['urls']:
             parent_json['urls'].append(url)
-            skip_urls.append(url)
         else:
             child_json['urls'].remove(url)
+            skip_urls.append(url)
 
     if len(skip_urls) != 0:
         embed = discord.Embed(title=':warning:登録済みのURLはスキップされました。', color=0xffff00)
@@ -958,21 +929,16 @@ async def join_playlist(ctx: discord.Interaction, parent_playlist: str, child_pl
         return
 
     json_list = {'owner': parent_json['owner'], 'locked': parent_json['locked'], 'urls': parent_json['urls']}
-    with open(f'{PLAYLIST_PATH}{parent_json}.json', 'w', encodin='utf-8') as f:
+    with open(f'{PLAYLIST_PATH}{parent_playlist}.json', 'w', encoding='utf-8') as f:
         f.write(orjson.dumps(json_list, option=orjson.OPT_INDENT_2).decode('utf-8'))
 
     embed = discord.Embed(title=f'プレイリスト:{child_playlist}を{parent_playlist}に結合しました。', color=0xffffff)
     await ctx.followup.send(embed=embed)
 
     # Show Queue
-    PAGES = len(Utils.chunk_list(child_json['urls'], 10))
-    for i in range(PAGES):
-        queue_slice = child_json['urls'][i*10:(i+1)*10]
-        queue_description = '\n'.join(f'[{Utils.get_title_url(item)}]({item})' for item in queue_slice)
-        embed = discord.Embed(
-            title=f'プレイリスト:{parent_playlist}に追加された曲の一覧{i+1}/{PAGES}', description=queue_description, color=0xffffff)
-        embed.set_footer(text=f'プレイリストに登録された曲数:{len(child_json["urls"])}曲')
-        await ctx.channel.send(embed=embed)
+    embed = Utils.create_queue_embed(child_json['urls'], title=f'プレイリスト:{parent_playlist}に追加された曲の一覧',
+                                     footer=f'プレイリストに登録された曲数:{len(child_json["urls"])}曲', addPages=True)
+    await ctx.channel.send(embed=embed)
 
 
 # Reset Bot Command
@@ -1039,6 +1005,8 @@ async def on_ready():
 @tree.error
 async def on_app_command_error(ctx: discord.Interaction, error):
     logger.critical(f'Error: {error}')
-    await ctx.response.send_message(f'CriticalError!!!: {error}')
+    embed = discord.Embed(
+            title=f'CriticalError!!!: {error}', color=0xff0000)
+    await ctx.channel.send(embed=embed)
 
 client.run(TOKEN)
