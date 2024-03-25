@@ -28,6 +28,7 @@ class Player:
                 'preferredcodec': 'mp3',
                 'preferredquality': '192',
             }],
+            'logger': self.logger
         }
         with YoutubeDL(ydl_opts) as ydl:
             song = ydl.extract_info(url, download=False)
