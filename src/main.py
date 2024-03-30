@@ -24,6 +24,7 @@ import Utils
 # Global Variables
 global NEXT_SONG
 global IS_LOOP
+global INTERRUPT
 # Constants
 NCLIENT = NicoNico()
 NEXT_SONG = None
@@ -34,6 +35,8 @@ PLAYLIST_PATH = '/Lists/'
 PLAYLIST_DATES_PATH = '/data/playlist_date.json'
 # Log Path
 LOG_PATH = '/Log/PlayAudio.log'
+# Setting Folder Path
+SETTING_PATH = '/Settings/settings.json'
 
 # Setup Logging
 logger = logging.getLogger('PlayAudio')
@@ -69,6 +72,17 @@ with open(os.path.join(DISCORD_TOKEN_FOLDER_PATH, 'token.txt')) as t, \
     GUILD = discord.Object(GUILD_ID)
 
 logger.info('Discord Token Loaded')
+
+# Load Settings
+if not os.path.exists(SETTING_PATH):
+    with open(SETTING_PATH, 'w') as f:
+        f.write('{"interrupt": false}')
+    INTERRUPT = False
+else:
+    with open(SETTING_PATH, 'r') as f:
+        INTERRUPT = orjson.loads(f.read())['interrupt']
+
+logger.info(f'Settings Loaded:{INTERRUPT}')
 
 # Downloader Initialize
 Downloader = Downloader.Downloader()
@@ -177,6 +191,7 @@ def create_next_embed(url: str):
         discord.Embed: Embed
     """
     embed = discord.Embed(title='次の曲', description=f'[{Utils.get_title_url(url)}]({url})', color=0xffffff)
+    embed.set_footer(text='キューに入っている曲数:'+str(len(Queue.get_queue()))+'曲')
     if 'youtu' in url:
         embed.set_image(url=f'https://img.youtube.com/vi/{Utils.get_video_id(url)}/mqdefault.jpg')
         logger.info('Get Youtube thumbnail')
@@ -375,7 +390,7 @@ async def play(ctx: discord.Interaction, urls: str = None, playlists: str = None
         logger.debug('Shuffle URLs')
 
     # add url to queue
-    Queue.add_queue(urls)
+    Queue.add_queue(urls, interrupt=INTERRUPT)
     logger.debug('Add URLs to Queue')
     logger.debug(f'Queue: {Queue.get_queue()}')
 
@@ -969,6 +984,7 @@ async def play_error(ctx: discord.Interaction, error):
     return
 
 
+# Log Command
 @tree.command(
     guild=GUILD,
     name='log',
@@ -977,6 +993,35 @@ async def play_error(ctx: discord.Interaction, error):
 async def log(ctx: discord.Interaction):
     embed = discord.Embed(title='ログを出力します。', color=0xffffff)
     await ctx.response.send_message(embed=embed, file=discord.File(LOG_PATH))
+
+
+# Setting Command
+@tree.command(
+    guild=GUILD,
+    name='設定',
+    description='設定を変更します。'
+)
+async def setting(ctx: discord.Interaction, interrupt: bool):
+    global INTERRUPT
+    INTERRUPT = interrupt
+    with open('setting.json', 'w', encoding='utf-8') as f:
+        f.write(orjson.dumps({'interrupt': interrupt}, option=orjson.OPT_INDENT_2).decode('utf-8'))
+    embed = discord.Embed(title='設定を変更しました。', color=0xffffff)
+    await ctx.response.send_message(embed=embed)
+
+
+# Show Setting Command
+@tree.command(
+    guild=GUILD,
+    name='show_setting',
+    description='設定を表示します。'
+)
+async def show_setting(ctx: discord.Interaction):
+    with open('setting.json', 'r', encoding='utf-8') as f:
+        setting = orjson.loads(f.read())
+    embed = discord.Embed(title='設定', color=0xffffff)
+    embed.add_field(name='曲割り込み機能', value=setting['interrupt'])
+    await ctx.response.send_message(embed=embed)
 
 
 # Disconnect Bot Command

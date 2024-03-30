@@ -12,10 +12,12 @@ services:
       - DiscordBotVolume:/data/
       - DiscordBotLogVolume:/Log/
       - DiscordBotListsVolume:/Lists/
+      - DiscordBotSettingsVolume:/Settings/
     environment:
       - TZ=Asia/Tokyo
 volumes:
   DiscordBotVolume:
   DiscordBotLogVolume:
   DiscordBotListsVolume:
+  DiscordBotSettingsVolume:
 x-project-name: PlayAudio

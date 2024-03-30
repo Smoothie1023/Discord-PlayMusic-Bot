@@ -15,7 +15,7 @@ class Queue:
         self.queue = []
         self.now_playing = None
 
-    def add_queue(self, urls: list) -> list:
+    def add_queue(self, urls: list, interrupt: bool) -> list:
         """Add Queue
         Note: This Function is used to add Queue
 
@@ -24,8 +24,15 @@ class Queue:
 
         Returns:
             list: List of URLs
+
         """
-        self.queue.extend(list(urls))
+        if interrupt:
+            tmp = self.queue.copy()
+            self.queue.clear()
+            self.queue.extend(list(urls))
+            self.queue.extend(tmp)
+        else:
+            self.queue.extend(list(urls))
         self.logger.debug(f'Add_Queue: {self.queue}')
         return self.queue
 
