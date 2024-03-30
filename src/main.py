@@ -998,7 +998,7 @@ async def log(ctx: discord.Interaction):
 # Setting Command
 @tree.command(
     guild=GUILD,
-    name='Settings',
+    name='settings',
     description='設定を変更します。'
 )
 async def setting(ctx: discord.Interaction, interrupt: bool):
