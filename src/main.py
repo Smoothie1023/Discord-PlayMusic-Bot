@@ -998,13 +998,13 @@ async def log(ctx: discord.Interaction):
 # Setting Command
 @tree.command(
     guild=GUILD,
-    name='設定',
+    name='Settings',
     description='設定を変更します。'
 )
 async def setting(ctx: discord.Interaction, interrupt: bool):
     global INTERRUPT
     INTERRUPT = interrupt
-    with open('setting.json', 'w', encoding='utf-8') as f:
+    with open(SETTING_PATH, 'w', encoding='utf-8') as f:
         f.write(orjson.dumps({'interrupt': interrupt}, option=orjson.OPT_INDENT_2).decode('utf-8'))
     embed = discord.Embed(title='設定を変更しました。', color=0xffffff)
     await ctx.response.send_message(embed=embed)
@@ -1017,7 +1017,7 @@ async def setting(ctx: discord.Interaction, interrupt: bool):
     description='設定を表示します。'
 )
 async def show_setting(ctx: discord.Interaction):
-    with open('setting.json', 'r', encoding='utf-8') as f:
+    with open(SETTING_PATH, 'r', encoding='utf-8') as f:
         setting = orjson.loads(f.read())
     embed = discord.Embed(title='設定', color=0xffffff)
     embed.add_field(name='曲割り込み機能', value=setting['interrupt'])
