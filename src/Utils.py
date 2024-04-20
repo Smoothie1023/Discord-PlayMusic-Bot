@@ -26,7 +26,7 @@ class Utils:
         # Regular Expression
         # Supported Websites
         self.SUPPORTED_WEBSITES = \
-            re.compile(r"youtube|youtu.be|nicovideo|nico|twitter|t.co|soundcloud.com|x|cdn.discordapp.com")
+            re.compile(r"youtube|youtu.be|nicovideo|nico|twitter|t.co|soundcloud.com|x|cdn.discordapp.com|radiko")
         # Youtube URL Format
         self.YOUTUBEURLFORMAT = \
             re.compile(r'https://(?:www\.)?youtube\.com/(?:[^/]+/)?(?:[^/]+/)?(?:watch\?v=)?([^/]+)')
