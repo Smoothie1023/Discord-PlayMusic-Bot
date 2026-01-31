@@ -165,3 +165,6 @@ pyvenv.cfg
 Test/
 lists/
 playlist_date.json
+
+# Docker永続データディレクトリ
+/persistent/

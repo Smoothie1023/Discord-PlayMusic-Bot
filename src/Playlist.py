@@ -26,16 +26,16 @@ class Playlist:
     def __init__(self, PLAYLIST_PATH: str, PLAYLIST_DATES_PATH: str):
         """Initialize Playlist Class"""
         self.logger = logger
-        self.logger.debug('Playlist Class Initialized')
+        self.logger.debug('🗂️ Playlist クラスが初期化されました')
 
         self.playlist_path = PLAYLIST_PATH
-        self.logger.debug(f'Playlist Path: {self.playlist_path}')
+        self.logger.debug(f'📁 プレイリストパス設定: {self.playlist_path}')
 
         self.playlist_dates_path = PLAYLIST_DATES_PATH
 
         if os.path.isfile(self.playlist_dates_path):
             self.playlist_dates = self.load_playlists_date()
-            self.logger.debug(f'Load Playlist Dates: {self.playlist_dates}')
+            self.logger.info(f'📅 プレイリスト使用履歴を読み込みました - {len(self.playlist_dates)}個のプレイリスト')
         else:
             self.playlist_dates = {}
             self.save_playlists_date()
@@ -126,3 +126,34 @@ class Playlist:
         else:
             self.logger.debug('File Not Found')
             return False
+
+    def remove_urls_from_playlist(self, playlist: str, urls_to_remove: list) -> int:
+        """プレイリストからエラーURLを削除
+        Args:
+            playlist (str): プレイリスト名（拡張子なし）
+            urls_to_remove (list): 削除するURLのリスト
+        Returns:
+            int: 削除されたURLの数
+        """
+        playlist_file = os.path.join(self.playlist_path, f'{playlist}.json')
+        if not os.path.isfile(playlist_file):
+            self.logger.warning(f'⚠️ プレイリストが見つかりません: {playlist}')
+            return 0
+
+        try:
+            with open(playlist_file, 'r', encoding='utf-8') as f:
+                data = orjson.loads(f.read())
+
+            original_count = len(data['urls'])
+            data['urls'] = [url for url in data['urls'] if url not in urls_to_remove]
+            removed_count = original_count - len(data['urls'])
+
+            if removed_count > 0:
+                with open(playlist_file, 'w', encoding='utf-8') as f:
+                    f.write(orjson.dumps(data, option=orjson.OPT_INDENT_2).decode('utf-8'))
+                self.logger.info(f'🗑️ プレイリスト "{playlist}" から {removed_count}件のエラーURLを削除しました')
+
+            return removed_count
+        except Exception as e:
+            self.logger.error(f'❌ プレイリストからのURL削除でエラー: {e}')
+            return 0

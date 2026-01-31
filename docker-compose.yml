@@ -1,5 +1,14 @@
-version: "3"
 services:
+  # bgutil PO Token provider server for YouTube bot detection bypass
+  bgutil-provider:
+    image: brainicism/bgutil-ytdlp-pot-provider
+    container_name: "bgutil-provider"
+    restart: always
+    ports:
+      - "4416:4416"
+    environment:
+      - TZ=Asia/Tokyo
+
   python3:
     restart: always
     image: python:3.11.7
@@ -7,17 +16,18 @@ services:
     container_name: "playaudio"
     working_dir: "/root/src"
     tty: true
+    depends_on:
+      - bgutil-provider
     volumes:
       - ./src:/root/src
-      - DiscordBotVolume:/data/
-      - DiscordBotLogVolume:/Log/
-      - DiscordBotListsVolume:/Lists/
-      - DiscordBotSettingsVolume:/Settings/
+      - ./DiscordTokens:/root/DiscordTokens
+      # 永続データはホストディレクトリにバインドマウント（docker volume pruneで消えない）
+      - ./persistent/data:/data
+      - ./persistent/Log:/Log
+      - ./persistent/Lists:/Lists
+      - ./persistent/Settings:/Settings
     environment:
       - TZ=Asia/Tokyo
-volumes:
-  DiscordBotVolume:
-  DiscordBotLogVolume:
-  DiscordBotListsVolume:
-  DiscordBotSettingsVolume:
+      - BGUTIL_SERVER_URL=http://bgutil-provider:4416
+
 x-project-name: PlayAudio

@@ -9,11 +9,14 @@ import orjson
 from yt_dlp import YoutubeDL
 from niconico import NicoNico
 
+import Utils
+
 # Setup Logging
 logger = logging.getLogger('PlayAudio')
 # Initialize NicoNico
 Nclient = NicoNico()
-
+# Utils Initialize
+Utils = Utils.Utils()
 
 class Downloader:
     """Download from URL Class
@@ -28,6 +31,8 @@ class Downloader:
             'preferredcodec': 'mp3',
             'preferredquality': '96'
         }],
+        'ignoreerrors': False,
+        'age_limit': None
     }
     # YoutubeDL Options Only Info
     ydl_opts_only_info = {
@@ -36,9 +41,8 @@ class Downloader:
 
     def __init__(self):
         """Initialize Downloader Class"""
-        self.niconico_videoID_patterns = re.compile(r'(sm|nm)(\d)*')
         self.logger = logger
-        self.logger.debug('Downloader Class Initialized')
+        self.logger.debug('⬇️ Downloader クラスが初期化されました')
 
     def streamming_youtubedl(self, url: str, options: list = ydl_opts_default) -> dict:
         """Streamming from YoutubeDL
@@ -50,8 +54,8 @@ class Downloader:
         Returns:
             dict: Streamming Information
         """
-        self.logger.debug(f'YoutubeDL Streamming URL: {url}')
-        self.logger.debug(f'YoutubeDL Streamming Options: {options}')
+        self.logger.info(f'📺 YoutubeDLストリーミング処理開始: {url}')
+        self.logger.debug(f'⚙️ ストリーミングオプション: {options}')
         if 'nico' in url:
             nvideo = Nclient.video.get_video(url)
             nvideo.connect()
@@ -122,45 +126,8 @@ class Downloader:
                 self.logger.critical(f'Exception: {e}')
                 return None
         elif 'nico' in source_url:
-            url = f'https://ext.nicovideo.jp/api/getthumbinfo/{self.GetVideoID(source_url)}'
+            url = f'https://ext.nicovideo.jp/api/getthumbinfo/{Utils.get_video_id(source_url)}'
             res = requests.get(url)
             return res.text[res.text.find("<title>")+7:res.text.rfind("</title>")]
-
-    def GetVideoID(self, url: str) -> str:
-        """Get Video ID from URL
-
-        Args:
-            url (str): URL
-
-        Returns:
-            str: Video ID
-            str: 'None' : Failed to get Video ID
-        """
-        self.logger.info(f'Get Video ID from URL: {url}')
-        if 't.co' in url:
-            url = requests.get(url).url
-            self.logger.debug(f'Convert t.co URL: {url}')
-        if 'youtu.be' in url:
-            result = urlparse(url).path
-            self.logger.debug(f'Youtube.be Video ID: {result[1:]}')
-            return result[1:]
-        elif 'youtube' in url:
-            if 'live' in url:
-                result = urlparse(url).path
-                self.logger.debug(f'Youtube Live Video ID: {result[6:]}')
-                return result[6:]
-            result = urlparse(url).path
-            result = parse_qs(result)['v'][0]
-            self.logger.debug(f'Youtube Video ID: {result}')
-            return result
-        elif 'nico' in url:
-            self.logger.debug(f'NicoNico Video ID: {self.niconico_videoID_patterns.search(url).group()}')
-            return self.niconico_videoID_patterns.search(url).group()
-        elif 'twitter' in url:
-            if '/video' in url:
-                result = url[url.rfind('status/')+7:url.rfind('/video')]
-                self.logger.debug(f'Twitter Video ID: {result}')
-                return result
         else:
-            self.logger.warning('Can\'t Get Video ID')
-            return 'None'
+            return None

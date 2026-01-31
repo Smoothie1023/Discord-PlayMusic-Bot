@@ -21,7 +21,7 @@ class Utils:
     def __init__(self):
         """Initialize Utils Class"""
         self.logger = logger
-        self.logger.debug('Utils Class Initialized')
+        self.logger.debug('🔧 Utils クラスが初期化されました')
 
         # Regular Expression
         # Supported Websites
@@ -35,9 +35,9 @@ class Utils:
         """Delete Space
         Note: This Function is used to delete space from URL
         """
-        self.logger.debug(f'DeleteSpace:in:URLs: {urls}')
+        self.logger.debug(f'🧹 URL空白削除処理開始 - 入力: {len(urls)}件のURL')
         cleaned_urls = [url.replace(' ', '').replace('　', '') for url in urls if url.strip()]
-        self.logger.debug(f'DeleteSpace:out:URLs: {cleaned_urls}')
+        self.logger.debug(f'✅ URL空白削除処理完了 - 出力: {len(cleaned_urls)}件のURL')
         return cleaned_urls
 
     def check_url(self, urls: list) -> list:
@@ -46,10 +46,11 @@ class Utils:
         """
         valid_urls = []
         error = []
-        self.logger.debug(f'Check URL: {urls}')
+        self.logger.info(f'🔍 URL検証処理開始 - {len(urls)}件のURLを検証します')
         with requests.Session() as session:
             for url in urls:
                 if self.SUPPORTED_WEBSITES.search(url) is None:
+                    self.logger.warning(f'❌ 対応していないサイト: {url}')
                     error.append(f':warning:[この動画サイト]({url})は対応してません。')
                     continue
                 if 't.co' in url or 'x.com' in urls:
@@ -62,11 +63,11 @@ class Utils:
                         url = f'https://www.youtube.com/watch?v={self.YOUTUBEURLFORMAT.search(url).group(1)}'
                     video_id = self.get_video_id(url)
                     if session.get(f'http://img.youtube.com/vi/{video_id}/mqdefault.jpg').status_code != 200:
-                        logger.warning(f'Youtube Video Not Found: {url}')
+                        logger.warning(f'❌ YouTube動画が見つかりません（削除済み/非公開）: {url}')
                         error.append(f':warning:[こちらの動画]({url})は削除または非公開にされています。')
                         continue
                     if self.is_music_premium_video(url):
-                        logger.warning(f'Youtube Music Premium Video: {url}')
+                        logger.warning(f'❌ YouTube Music Premium専用動画: {url}')
                         error.append(f':warning:[こちらの動画]({url})はYoutube Music Premiumの動画です。')
                         continue
                     url = f'https://www.youtube.com/watch?v={video_id}'
@@ -138,11 +139,16 @@ class Utils:
         Returns:
             bool: True if the video is music premium
         """
-        response = urllib.request.urlopen(url)
-        html = response.read()
-        if (html.decode('utf-8').find('この動画を視聴できるのは、Music Premium のメンバーのみです')) != -1:
-            return True
-        else:
+        try:
+            response = requests.get(url, timeout=5)
+            if 'この動画を視聴できるのは、Music Premium のメンバーのみです' in response.text:
+                return True
+            return False
+        except requests.Timeout:
+            logger.warning(f'⚠️ Music Premiumチェックがタイムアウトしました: {url}')
+            return False
+        except Exception as e:
+            logger.warning(f'⚠️ Music Premiumチェックでエラー: {e}')
             return False
 
     @lru_cache(maxsize=500)
@@ -175,21 +181,25 @@ class Utils:
         """
         if 'youtu' in url:
             params = {'format': 'json', 'url': url}
-            url = 'https://www.youtube.com/oembed'
+            oembed_url = 'https://www.youtube.com/oembed'
             query_string = urllib.parse.urlencode(params)
-            url = url + '?' + query_string
+            oembed_url = oembed_url + '?' + query_string
 
             try:
-                with urllib.request.urlopen(url) as response:
-                    response_text = response.read()
-                    data = json.loads(response_text.decode())
+                response = requests.get(oembed_url, timeout=5)
+                if response.status_code == 200:
+                    data = response.json()
                     return data['title']
-            except urllib.error.HTTPError:
+                return self.get_title_from_ytdlp(url)
+            except Exception:
                 return self.get_title_from_ytdlp(url)
         if 'nico' in url:
-            url = f'https://ext.nicovideo.jp/api/getthumbinfo/{self.get_video_id(url)}'
-            res = requests.get(url)
-            return res.text[res.text.find('<title>')+7:res.text.find('</title>')]
+            nico_url = f'https://ext.nicovideo.jp/api/getthumbinfo/{self.get_video_id(url)}'
+            try:
+                res = requests.get(nico_url, timeout=5)
+                return res.text[res.text.find('<title>')+7:res.text.find('</title>')]
+            except Exception:
+                return self.get_title_from_ytdlp(url)
         return self.get_title_from_ytdlp(url)
 
     def chunk_list(self, urls: list, size: int) -> list:

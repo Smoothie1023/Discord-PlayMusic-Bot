@@ -11,7 +11,7 @@ class Queue:
     def __init__(self):
         """Initialize Queue Class"""
         self.logger = logger
-        self.logger.debug('Queue Class Initialized')
+        self.logger.debug('📋 Queue クラスが初期化されました')
         self.queue = []
         self.now_playing = None
 
@@ -33,7 +33,7 @@ class Queue:
             self.queue.extend(tmp)
         else:
             self.queue.extend(list(urls))
-        self.logger.debug(f'Add_Queue: {self.queue}')
+        self.logger.info(f'📋 キューに追加完了 - 割り込み: {interrupt}, 現在のキュー長: {len(self.queue)}曲')
         return self.queue
 
     def clear_queue(self) -> list:
@@ -44,7 +44,7 @@ class Queue:
             list: List of URLs
         """
         self.queue = []
-        self.logger.debug(f'Clear_Queue: {self.queue}')
+        self.logger.info('🗑️ キューをクリアしました')
         return self.queue
 
     def skip_queue(self, index: int) -> None:
@@ -57,10 +57,10 @@ class Queue:
         """
         if index < len(self.queue):
             self.queue = self.queue[index:]
-            self.logger.debug(f'Skip_Queue: {self.queue}')
+            self.logger.info(f'⏭️ キューを{index}曲スキップしました - 残りキュー長: {len(self.queue)}曲')
         else:
             self.queue.clear()
-            self.logger.debug(f'Skip_Queue: {self.queue}')
+            self.logger.info('⏭️ キューを全てスキップしました（キューが空になりました）')
 
     def get_queue(self) -> list:
         """Get Queue
@@ -69,7 +69,7 @@ class Queue:
         Returns:
             list: List of URLs
         """
-        self.logger.debug(f'Get_Queue: {self.queue}')
+        self.logger.debug(f'📋 キュー情報取得 - 現在のキュー長: {len(self.queue)}曲')
         return self.queue
 
     def pop_queue(self) -> str:
@@ -81,5 +81,6 @@ class Queue:
         """
         url = self.queue.pop(0)
         self.now_playing = url
-        self.logger.debug(f'Pop_Queue: {self.queue}')
+        self.logger.info(f'🎵 キューから次の曲を取得しました - 残りキュー長: {len(self.queue)}曲')
+        self.logger.debug(f'▶️ 再生開始: {url}')
         return url

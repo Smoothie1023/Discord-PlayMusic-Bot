@@ -1,1057 +1,276 @@
 # -*- coding: utf-8 -*-
+"""
+PlayAudio Discord Bot - エントリーポイント
+
+このファイルはボットの起動とCogの読み込みを行うシンプルなエントリーポイントです。
+各機能は以下のCogに分割されています：
+- cogs/music.py: 音楽再生機能（play, queue, skip, loop）
+- cogs/playlist.py: プレイリスト管理機能
+- cogs/admin.py: 管理機能（reset, log, settings, update）
+"""
+
+import asyncio
 import logging
-from logging.handlers import RotatingFileHandler
-import os
-import random
-import time
-from datetime import datetime
-from typing import List, Literal
 
 import discord
-from discord import app_commands
-from discord.ext import tasks
-from discord.ui import Modal, text_input
-from niconico import NicoNico
-import orjson
-import requests
+from discord.ext import commands
 
-import Downloader as Downloader
-import Player
-import Playlist
-import Queue
-import Utils
+# 各モジュールのインポート
+from config import config_manager
+import Downloader as DownloaderModule
+import Player as PlayerModule
+import Playlist as PlaylistModule
+import Queue as QueueModule
+import UpdateManager as UpdateManagerModule
+import Utils as UtilsModule
 
-# Global Variables
-global NEXT_SONG
-global IS_LOOP
-global INTERRUPT
-# Constants
-NCLIENT = NicoNico()
-NEXT_SONG = None
-IS_LOOP = False
-# PlayList Path
-PLAYLIST_PATH = '/Lists/'
-# PlayList Dates Path
-PLAYLIST_DATES_PATH = '/data/playlist_date.json'
-# Log Path
-LOG_PATH = '/Log/PlayAudio.log'
-# Setting Folder Path
-SETTING_PATH = '/Settings/settings.json'
+# Cogsのインポート
+from cogs.music import MusicCog
+from cogs.playlist import PlaylistCog
+from cogs.admin import AdminCog
 
-# Setup Logging
-logger = logging.getLogger('PlayAudio')
-logger.setLevel(logging.DEBUG)
-handler = RotatingFileHandler(LOG_PATH, maxBytes=8*1024*1024, backupCount=10, encoding='utf-8')
-handler.setLevel(logging.DEBUG)
+# ログ設定
+logger = config_manager.setup_logging()
+logger.info('📢 PlayAudio Bot を開始しています...')
 
-# Create a logging format
-fmt = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-handler.setFormatter(fmt)
-logger.addHandler(handler)
+# Discord設定読み込み
+try:
+    bot_config = config_manager.load_tokens()
+    GUILD = discord.Object(bot_config.guild_id)
+except FileNotFoundError:
+    exit(1)
 
-# Change Permission
-os.chmod(LOG_PATH, 0o666)
-
-logger.info('Starting PlayAudio')
-
-# Discord Bot Initialize
-client = discord.Client(intents=discord.Intents.default())
-tree = discord.app_commands.CommandTree(client)
-
-# Discord Token Folder Path
-DISCORD_TOKEN_FOLDER_PATH = '../DiscordTokens/'
-# Load Discord Tokens
-with open(os.path.join(DISCORD_TOKEN_FOLDER_PATH, 'token.txt')) as t, \
-        open(os.path.join(DISCORD_TOKEN_FOLDER_PATH, 'guild_id.txt')) as g, \
-        open(os.path.join(DISCORD_TOKEN_FOLDER_PATH, 'vc_channel_id.txt')) as v, \
-        open(os.path.join(DISCORD_TOKEN_FOLDER_PATH, 'channel_id.txt')) as c:
-    TOKEN = t.read()
-    GUILD_ID = g.read()
-    VC_CHANNEL_ID = int(v.read())
-    CHANNEL_ID = int(c.read())
-    GUILD = discord.Object(GUILD_ID)
-
-logger.info('Discord Token Loaded')
-
-# Load Settings
-if not os.path.exists(SETTING_PATH):
-    with open(SETTING_PATH, 'w') as f:
-        f.write('{"interrupt": false}')
-    INTERRUPT = False
-else:
-    with open(SETTING_PATH, 'r') as f:
-        INTERRUPT = orjson.loads(f.read())['interrupt']
-
-logger.info(f'Settings Loaded:{INTERRUPT}')
-
-# Downloader Initialize
-Downloader = Downloader.Downloader()
-# Player Initialize
-Player = Player.Player()
-# Playlist Initialize
-Playlist = Playlist.Playlist(PLAYLIST_PATH, PLAYLIST_DATES_PATH)
-# Queue Initialize
-Queue = Queue.Queue()
-# Utils Initialize
-Utils = Utils.Utils()
+# 各クラスのインスタンス化
+Downloader = DownloaderModule.Downloader()
+Player = PlayerModule.Player()
+Playlist = PlaylistModule.Playlist(config_manager.PLAYLIST_PATH, config_manager.PLAYLIST_DATES_PATH)
+Queue = QueueModule.Queue()
+Utils = UtilsModule.Utils()
+UpdateManager = UpdateManagerModule.UpdateManager()
 
 
-# Youtube Streamming Function
-def play_music(vc) -> dict:
-    """Play Music Function
-    Args:
-        vc (discord.VoiceClient): VoiceClient
+class PlayAudioBot(commands.Bot):
+    """PlayAudio Discord Bot"""
 
-    Returns:
-        dict: Streamming URL
-    """
-    global IS_LOOP
-    # Check if Queue is empty and Loop is False
-    if (len(Queue.get_queue()) == 0) and (not IS_LOOP):
-        return
-    # Check if Loop
-    if IS_LOOP:
-        url = Queue.now_playing
-    else:
-        url = Queue.pop_queue()
-    logger.info(f'Play Music: {url}')
-    # Close NVideo
-    try:
-        NVIDEO.close()
-        logger.info('Closed NVideo')
-    except Exception:
-        pass
-    # if niconico video get download link
-    if 'nico' in url:
-        try:
-            NVIDEO = NCLIENT.video.get_video(url)
-            NVIDEO.connect()
-            url = NVIDEO.download_link
-        except Exception:
-            pass
-    # get streamming url
-    s_y = Player.streamming_youtube(url)
+    def __init__(self):
+        intents = discord.Intents.default()
+        intents.guilds = True
+        intents.voice_states = True
 
-    # ffmpeg options
-    ffmpeg_options = {
-        'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
-        'options': '-vn -filter:a loudnorm'}
-    try:
-        logger.info(f'Stremming Music URL: {s_y["url"]}')
-        vc.play(source=discord.FFmpegPCMAudio(s_y["url"], **ffmpeg_options), after=lambda e: play_music(vc))
-    except Exception as e:
-        logger.error(f'play_music_Error: {e}')
-        return
-    return s_y
+        super().__init__(
+            command_prefix='!',
+            intents=intents,
+        )
 
+        self.config_manager = config_manager
+        self.guild = GUILD
 
-# Notificate change Music
-@tasks.loop(seconds=1)
-async def check_music() -> None:
-    """Notificate change Music"""
-    global NEXT_SONG, IS_LOOP
-    # Wait run Bot
-    await client.wait_until_ready()
-    vc_channel = client.get_channel(VC_CHANNEL_ID)
-    channel = client.get_channel(CHANNEL_ID)
+        # Cogインスタンスを保持
+        self.music_cog = None
+        self.playlist_cog = None
+        self.admin_cog = None
 
-    try:
-        if vc_channel.guild.voice_client:
-            vc = discord.utils.get(client.voice_clients)
-            if vc.is_playing():
-                # Change Presence
-                if IS_LOOP:
-                    await client.change_presence(activity=discord.Activity(
-                        type=discord.ActivityType.listening, name="🔄"+Utils.get_title_url(Queue.now_playing)))
-                else:
-                    await client.change_presence(activity=discord.Activity(
-                        type=discord.ActivityType.listening, name="⏩"+Utils.get_title_url(Queue.now_playing)))
+    async def setup_hook(self):
+        """Cog読み込みとコマンド同期"""
+        # Cogの作成と追加
+        self.music_cog = MusicCog(
+            self,
+            config_manager,
+            Player,
+            Queue,
+            Playlist,
+            Utils
+        )
+        self.playlist_cog = PlaylistCog(
+            self,
+            config_manager,
+            Playlist,
+            Utils
+        )
+        self.admin_cog = AdminCog(
+            self,
+            config_manager,
+            Queue,
+            Utils,
+            UpdateManager,
+            self.music_cog
+        )
 
-                # Check if Next Song
-                if vc.source is None:
-                    NEXT_SONG = vc.source
-                    await channel.send(embed=create_next_embed(Queue.get_queue()[0]))
-                if vc.source != NEXT_SONG:
-                    NEXT_SONG = vc.source
-                    await channel.send(embed=create_next_embed(Queue.get_queue()[0]))
+        await self.add_cog(self.music_cog)
+        await self.add_cog(self.playlist_cog)
+        await self.add_cog(self.admin_cog)
+
+        # オートコンプリートの設定
+        self._setup_autocomplete()
+
+        # コマンド同期
+        self.tree.copy_global_to(guild=self.guild)
+        await self.tree.sync(guild=self.guild)
+        logger.info('✅ Discordスラッシュコマンドの同期が完了しました')
+
+    def _setup_autocomplete(self):
+        """オートコンプリートを設定"""
+        # MusicCogのplayコマンドにオートコンプリートを追加
+        play_cmd = self.tree.get_command('play', guild=self.guild)
+        if play_cmd:
+            play_cmd.autocomplete('playlists')(self.music_cog.playlist_autocomplete)
+
+        # PlaylistCogのコマンドにオートコンプリートを追加
+        playlist_commands = [
+            'プレイリストに曲を追加',
+            'プレイリストを削除',
+            'プレイリストから曲を削除',
+            'プレイリスト名を変更',
+            'プレイリストに登録されている曲を表示',
+            'プレイリストのロックを変更',
+        ]
+
+        for cmd_name in playlist_commands:
+            cmd = self.tree.get_command(cmd_name, guild=self.guild)
+            if cmd:
+                cmd.autocomplete('playlist')(self.playlist_cog.playlist_autocomplete)
+
+        # プレイリスト結合コマンドのオートコンプリート
+        join_cmd = self.tree.get_command('プレイリストを結合する', guild=self.guild)
+        if join_cmd:
+            join_cmd.autocomplete('parent_playlist')(self.playlist_cog.playlist_autocomplete)
+            join_cmd.autocomplete('child_playlist')(self.playlist_cog.playlist_autocomplete)
+
+    async def on_ready(self):
+        """ボット起動完了時"""
+        logger.info('🚀 Discord Bot が正常に起動しました')
+        logger.info(f'👤 ログイン名: {self.user.name}#{self.user.discriminator}')
+
+        guild = self.get_guild(bot_config.guild_id)
+        if guild:
+            logger.info(f'🏠 接続サーバー: {guild.name}')
+        else:
+            logger.warning(
+                f'⚠️ ギルドID {bot_config.guild_id} が見つかりません。'
+                'ボットがサーバーに参加しているか確認してください。'
+            )
+
+        # 起動時の自動更新チェック
+        await self._auto_update_on_startup(guild)
+
+    async def _auto_update_on_startup(self, guild):
+        """起動時に自動でパッケージ更新をチェック・実行"""
+        logger.info('🔍 起動時の自動更新チェックを開始します...')
+
+        updates_available = []
+
+        for package_name in UpdateManager.ALLOWED_PACKAGES:
+            try:
+                current_version, latest_version, update_available = \
+                    await UpdateManager.check_update_available(package_name)
+
+                if update_available and current_version and latest_version:
+                    updates_available.append((package_name, current_version, latest_version))
+                    logger.info(f'📦 {package_name} の更新が利用可能: {current_version} → {latest_version}')
+
+            except Exception as e:
+                logger.error(f'❌ {package_name} 自動更新チェックエラー: {e}')
+
+        if not updates_available:
+            logger.info('✅ すべてのパッケージが最新です')
+            return
+
+        # 更新通知をDiscordに送信
+        channel = self.get_channel(bot_config.channel_id)
+        if channel:
+            embed = discord.Embed(
+                title='🔄 パッケージ更新を検出しました',
+                description='自動更新を実行します...',
+                color=0xff9900
+            )
+            for package_name, current_ver, latest_ver in updates_available:
+                embed.add_field(
+                    name=package_name,
+                    value=f'`{current_ver}` → `{latest_ver}`',
+                    inline=False
+                )
+            await channel.send(embed=embed)
+
+        # 更新を実行
+        updated_packages = []
+        failed_packages = []
+
+        for package_name, current_ver, latest_ver in updates_available:
+            logger.info(f'🔄 {package_name} を自動更新中: {current_ver} → {latest_ver}')
+            success = await UpdateManager.update_package(package_name)
+
+            if success:
+                updated_packages.append(package_name)
             else:
-                await client.change_presence(activity=None)
-    except IndexError:
-        pass
-    except Exception as e:
-        logger.error(f'tasks.loop_Error: {e}')
+                failed_packages.append(package_name)
 
-
-# Create Next Embed
-def create_next_embed(url: str):
-    """Create Next Embed
-    Args:
-        url (str): URL
-    Returns:
-        discord.Embed: Embed
-    """
-    embed = discord.Embed(title='次の曲', description=f'[{Utils.get_title_url(url)}]({url})', color=0xffffff)
-    embed.set_footer(text='キューに入っている曲数:'+str(len(Queue.get_queue()))+'曲')
-    if 'youtu' in url:
-        embed.set_image(url=f'https://img.youtube.com/vi/{Utils.get_video_id(url)}/mqdefault.jpg')
-        logger.info('Get Youtube thumbnail')
-    elif 'nico' in url:
-        with requests.Session() as session:
-            url = f'https://ext.nicovideo.jp/api/getthumbinfo/{Utils.get_video_id(url)}'
-            url = session.get(url)
-            url = url.text[url.text.find('<thumbnail_url>')+15:url.text.find('</thumbnail_url>')]+'.L'
-            if session.get(url).status_code != 200:
-                url = url[:-2]
-            embed.set_image(url=url)
-            logger.info('Get niconico thumbnail')
-    else:
-        logger.info('Can\'t Get thumbnail')
-    logger.info(f'thumbnailURL:{url}')
-    return embed
-
-# AutoComplete Playlist
-
-
-async def playlist_autocomplete(
-    interaction: discord.Interaction,
-    current: str
-) -> List[app_commands.Choice[str]]:
-    """AutoComplete Playlist
-    Args:
-        interaction (discord.Interaction): Interaction
-        current (str): Current
-    Returns:
-        List[app_commands.Choice[str]]: Playlist
-    """
-    data = []
-    playlists = []
-    files = os.listdir(PLAYLIST_PATH)
-    logger.debug(f'Playlist Files: {files}')
-    for file in files:
-        file = file[:-5]
-        if current.lower() in file.lower():
-            playlists.append(file)
-            if len(data) > 24:
-                break
-    logger.debug(f'Playlist Data: {data}')
-    playlists = Playlist.calculate_playlist_usage(playlists)
-    logger.debug(f'Playlist: {playlists}')
-    for playlist in playlists:
-        for file, date in playlist.items():
-            file = file[:-5]
-            if len(date) == 0:
-                date = ['最後に再生した日付なし']
-            if current.lower() in file.lower():
-                data.append(app_commands.Choice(name=file, value=file))
-    logger.debug(f'Playlist Data: {data}')
-    return data
-
-
-# Delete Playlist Input Modal
-class DeleteInput(Modal, title='プレイリストを削除'):
-    text = text_input.TextInput(label='削除するプレイリスト名', placeholder='プレイリスト名', max_length=100, required=True)
-
-    def __init__(self, playlist: str):
-        super().__init__(title='⚠削除後復元はできません！')
-        self.playlist = playlist
-
-    async def on_submit(self, interaction: discord.Interaction):
-        if self.text.value == self.playlist:
-            os.remove(f'{PLAYLIST_PATH}{self.playlist}.json')
-            embed = discord.Embed(title=f'プレイリスト:{self.playlist}を削除しました。', color=0xffffff)
-            Playlist.delete_playlists_date(self.playlist)
-            await interaction.response.send_message(embed=embed)
-            logger.info(f'Delete Playlist: {self.playlist}')
-        else:
-            embed = discord.Embed(title=':warning:プレイリスト名が一致しません。', color=0xffff00)
-            await interaction.response.send_message(embed=embed)
-            logger.warning('Playlist Name does not match')
-
-    async def on_cancel(self, interaction: discord.Interaction):
-        embed = discord.Embed(title='プレイリスト削除をキャンセルしました。', color=0xffffff)
-        await interaction.response.send_message(embed=embed)
-        logger.info('Cancel Delete Playlist')
-
-    async def on_timeout(self):
-        embed = discord.Embed(title='プレイリスト削除をキャンセルしました。', color=0xffffff)
-        await self.message.edit(embed=embed)
-        logger.info('Timeout Delete Playlist')
-
-    async def on_error(self, interaction: discord.Interaction, error: Exception):
-        return await interaction.response.send_message(error)
-
-
-# Discord Bot Commands
-# Play Command
-@tree.command(
-    guild=GUILD,
-    name='play',
-    description='指定されたURL、プレイリストから曲を再生します。'
-)
-@discord.app_commands.describe(
-    urls='動画のURL',
-    playlists='プレイリスト名',
-    shuffle='シャッフル再生'
-)
-@app_commands.autocomplete(playlists=playlist_autocomplete)
-async def play(ctx: discord.Interaction, urls: str = None, playlists: str = None, shuffle: Literal['シャッフル再生'] = None):
-    logger.debug('Play Command')
-    logger.debug(f'User: {ctx.user}')
-    logger.debug('args')
-    logger.debug(f'URLs: {urls}')
-    logger.debug(f'Playlists: {playlists}')
-    logger.debug(f'Shuffle: {shuffle}')
-    # Set Start Time for Debugging
-    start = time.time()
-
-    # Check if User is connected to Voice Channel
-    if ctx.user.voice is None:
-        embed = discord.Embed(title=':warning:ボイスチャンネルに接続してください。', color=0xffffff)
-        await ctx.response.send_message(embed=embed)
-        logger.warning('User is not connected to Voice Channel')
-        return
-
-    if urls is None and playlists is None:
-        embed = discord.Embed(title=':warning:URLまたはプレイリストを指定してください。', color=0xff0000)
-        await ctx.response.send_message(embed=embed)
-        logger.warning('No URL or Playlist')
-        return
-
-    await ctx.response.defer()
-
-    if not ctx.guild.voice_client:
-        # Connect to Voice Channel
-        await ctx.user.voice.channel.connect()
-        logger.debug('Connected to Voice Channel')
-
-    # Select URL Option
-    if urls is not None:
-        logger.debug('URL is not None')
-        urls = urls.split(',')
-        urls = Utils.delete_space(urls)
-
-    # Select Playlist Option
-    if playlists is not None:
-        playlists = playlists.split(',')
-        # Delete Duplicate Playlists
-        playlists = Utils.delete_space(playlists)
-        if len(playlists) != len(list(dict.fromkeys(playlists))):
-            embed = discord.Embed(title=':warning:重複したプレイリストは削除されました。', color=0xffffff)
-            await ctx.channel.send(embed=embed)
-        playlists = list(dict.fromkeys(playlists))
-        logger.info(f'Delete Duplicate Playlists: {playlists}')
-
-        # Get URLs from Playlists
-        for playlist in playlists:
-            if os.path.exists(f'{PLAYLIST_PATH}{playlist}.json'):
-                Playlist.record_play_date(f'{playlist}.json', datetime.now())
-                with open(f'{PLAYLIST_PATH}{playlist}.json', 'r', encoding='utf-8') as f:
-                    json_list = orjson.loads(f.read())
-                    if urls is not None:
-                        urls.extend(json_list['urls'])
-                    else:
-                        urls = json_list['urls']
+        # 結果を通知
+        if channel:
+            if updated_packages:
+                result_embed = discord.Embed(
+                    title='✅ 自動更新完了',
+                    description=f'更新されたパッケージ: {", ".join(updated_packages)}',
+                    color=0x00ff00
+                )
+                if failed_packages:
+                    result_embed.add_field(
+                        name='❌ 更新失敗',
+                        value=', '.join(failed_packages),
+                        inline=False
+                    )
+                result_embed.add_field(
+                    name='🔄 再起動',
+                    value='Botを再起動します...',
+                    inline=False
+                )
+                await channel.send(embed=result_embed)
             else:
-                embed = discord.Embed(title=f':warning:プレイリスト{playlist}が存在しません。', color=0xff0000)
-                await ctx.channel.send(embed=embed)
-                logger.warning(f'Playlist:{playlist} does not exist')
+                error_embed = discord.Embed(
+                    title='❌ 自動更新に失敗しました',
+                    description=f'失敗したパッケージ: {", ".join(failed_packages)}',
+                    color=0xff0000
+                )
+                await channel.send(embed=error_embed)
 
-        if urls is None:
-            embed = discord.Embed(title=':warning:再生する曲がありません。', color=0xff0000)
-            await ctx.followup.send(embed=embed)
-            logger.warning('No music to play command')
-            return
+        # 更新があった場合は再起動
+        if updated_packages:
+            await UpdateManager.restart_bot()
 
-        # Delete Duplicate URLs
-        if len(urls) != len(list(dict.fromkeys(urls))):
-            embed = discord.Embed(title=':warning:重複したURLは削除されました。', color=0xffffff)
-            await ctx.channel.send(embed=embed)
+    async def on_voice_state_update(self, member, before, after):
+        """ボイスチャンネル状態更新時の処理"""
+        voice_state = member.guild.voice_client
 
-        urls = list(dict.fromkeys(urls))
-    urls, error = Utils.check_url(urls)
-    logger.info(f'URLs: {urls}')
+        if voice_state is not None and len(voice_state.channel.members) == 1:
+            voice_state.cleanup()
 
-    # Check if Error Occurred
-    if error:
-        embed = discord.Embed(title=':warning:以下のエラーが発生しました。', description='\n'.join(error), color=0xff0000)
-        await ctx.channel.send(embed=embed)
-        logger.error(f'CheckURLErrors: {error}')
+            # MusicCogの状態をリセット
+            if self.music_cog:
+                self.music_cog.reset_state()
 
-    # Check if URL does not exist
-    if len(urls) == 0:
-        embed = discord.Embed(title=':warning:無効なURLが指定されました、URLを確認して再度実行してください。', color=0xff0000)
-        await ctx.followup.send(embed=embed)
-        logger.warning('URL does not exist')
-        return
+            Queue.clear_queue()
+            await self.change_presence(activity=None)
+            await voice_state.disconnect()
 
-    # if shuffle is not None shuffle urls
-    if shuffle is not None:
-        random.shuffle(urls)
-        logger.debug('Shuffle URLs')
-
-    # add url to queue
-    Queue.add_queue(urls, interrupt=INTERRUPT)
-    logger.debug('Add URLs to Queue')
-    logger.debug(f'Queue: {Queue.get_queue()}')
-
-    vc = discord.utils.get(client.voice_clients, guild=ctx.guild)
-
-    if not vc.is_playing():
-        embed = discord.Embed(
-            description=f'[{Utils.get_title_url(Queue.get_queue()[0])}]({Queue.get_queue()[0]})を再生します。', color=0xffffff)
-        if len(Queue.get_queue()) != 1:
-            embed.set_footer(text=f'他{len(urls)-1}曲はキューに追加しました。')
-        await ctx.followup.send(embed=embed)
-        play_music(vc)
-
-    else:
-        embed = discord.Embed(description=f'{len(urls)}曲をキューに追加しました。', color=0xffffff)
-        await ctx.followup.send(embed=embed)
-
-    # Show Queue
-    (urls[1:6] if len(urls) > 1 else urls)[0]
-    embed = Utils.create_queue_embed(urls, title='キューに追加された曲一覧', footer=f'プレイリストに追加された曲数:{len(urls)}曲', addPages=True)
-    await ctx.channel.send(embed=embed)
-
-    # Save Playlists Date
-    if playlists is not None:
-        for playlist in playlists:
-            Playlist.record_play_date(f'{playlist}.json', datetime.now())
-        Playlist.save_playlists_date()
-
-    endtime = time.time()
-    logger.debug(f'Play Command processing time: {endtime - start}sec')
-
-
-# Queue Command
-@tree.command(
-    guild=GUILD,
-    name='queue',
-    description='キューの確認'
-)
-async def queue(ctx: discord.Interaction):
-    if Queue.get_queue():
-        logger.debug('Queue Command')
-        logger.debug(f'Queue Sum: {len(Queue.get_queue())}')
-        logger.debug(f'Queue: {Queue.get_queue()}')
-        embed = discord.Embed(title='キュー', description=f'全{len(Queue.get_queue())}曲', color=0xffffff)
-        await ctx.response.send_message(embed=embed)
-
-        # Show Queue
-        embed = Utils.create_queue_embed(Queue.get_queue(), title='キュー一覧', addPages=True)
-        await ctx.channel.send(embed=embed)
-    else:
-        embed = discord.Embed(title=':warning:キューに曲が入っていません。', color=0xffff00)
-        await ctx.response.send_message(embed=embed)
-        logger.warning('Queue is empty')
-
-
-# Skip Command
-@tree.command(
-    guild=GUILD,
-    name='skip',
-    description='現在の曲をスキップします。'
-)
-async def skip(ctx: discord.Interaction, index: int = None):
-    global IS_LOOP, NVIDEO
-    logger.debug('Skip Command')
-    # Check if User is connected to Voice Channel
-    if ctx.user.voice is None:
-        embed = discord.Embed(title=':warning:ボイスチャンネルに接続してください。', color=0xff0000)
-        await ctx.response.send_message(embed=embed)
-        logger.warning('User is not connected to Voice Channel')
-        return
-    if index is not None:
-        if index < 1:
-            embed = discord.Embed(title=':warning:1曲未満をスキップすることはできません。', color=0xff0000)
-            await ctx.response.send_message(embed=embed)
-            logger.warning('Index is less than 1')
-            return
-        index = index - 1
-    else:
-        index = 0
-
-    vc = discord.utils.get(client.voice_clients, guild=ctx.guild)
-
-    try:
-        NVIDEO.close()
-    except Exception:
-        pass
-    if (vc and vc.is_playing()):
-        if IS_LOOP:
-            IS_LOOP = False
-            embed = discord.Embed(title='ループ再生を解除しました。', color=0xffffff)
-            logger.debug('Loop is False')
-            await ctx.channel.send(embed=embed)
-        Queue.skip_queue(index)
-        if len(Queue.get_queue()) == 0:
-            embed = discord.Embed(title=':warning:キューに曲がありません。', color=0xffff00)
-            logger.warning('Queue is empty')
-            await ctx.response.send_message(embed=embed)
-            vc.stop()
-            return
-        embed = discord.Embed(
-            title=f'{index+1}曲をスキップしました。',
-            description=f'[{Utils.get_title_url(Queue.get_queue()[0])}]({Queue.get_queue()[0]})を再生します。',
-            color=0xffffff)
-        logger.debug(f'Skip Music: {index+1}')
-        logger.debug(f'Next Music: {Utils.get_title_url(Queue.get_queue()[0])}')
-        await ctx.response.send_message(embed=embed)
-        vc.stop()
-    else:
-        embed = discord.Embed(title=':warning:再生中の曲がありません。', color=0xffff00)
-        logger.warning('Music is Not playing')
-        await ctx.response.send_message(embed=embed)
-
-
-# loop Command
-@tree.command(
-    guild=GUILD,
-    name='loop',
-    description='ループの設定'
-)
-async def loop(ctx: discord.Interaction):
-    global IS_LOOP
-    vc = discord.utils.get(client.voice_clients, guild=ctx.guild)
-    if vc and vc.is_playing():
-        if IS_LOOP:
-            IS_LOOP = False
-            embed = discord.Embed(title='ループ再生を解除しました。', color=0xffffff)
-            logger.debug('Loop is False')
-            await ctx.response.send_message(embed=embed)
-        else:
-            IS_LOOP = True
-            embed = discord.Embed(title='ループ再生を設定しました。', color=0xffffff)
-            logger.debug('Loop is True')
-            await ctx.response.send_message(embed=embed)
-    else:
-        embed = discord.Embed(title=':warning:再生中の曲がありません。', color=0xffff00)
-        logger.warning('Music is Not playing')
-        await ctx.response.send_message(embed=embed)
-
-
-# Playlist Commands
-# Create Playlist Command
-@tree.command(
-    guild=GUILD,
-    name='プレイリストを作成',
-    description='プレイリストを作成します。'
-)
-@discord.app_commands.describe(
-    urls='動画のURL',
-    playlist='プレイリスト名',
-    locked='プレイリストの編集を禁止する'
-)
-async def create_playlist(ctx: discord.Interaction, playlist: str, urls: str, locked: bool):
-    if Playlist.check_file(playlist):
-        embed = discord.Embed(title='プレイリスト作成', description='プレイリストが既に存在します。', color=0xff0000)
-        await ctx.response.send_message(embed=embed)
-        logger.warning('Playlist already exists')
-        return
-    else:
-        await ctx.response.defer()
-
-        urls = urls.split(',')
-        urls = Utils.delete_space(urls)
-        # Delete Duplicate URLs
-        if len(urls) != len(list(dict.fromkeys(urls))):
-            embed = discord.Embed(title=':warning:重複したURLは削除されました。', color=0xffffff)
-            logger.debug('Delete Duplicate URLs')
-            await ctx.channel.send(embed=embed)
-        urls = list(dict.fromkeys(urls))
-        urls, error = Utils.check_url(urls)
-
-        # Check if Error Occurred
-        if error:
-            embed = discord.Embed(title=':warning:以下のエラーが発生しました。', description='\n'.join(error), color=0xff0000)
-            await ctx.channel.send(embed=embed)
-            logger.error(f'CheckURLErrors: {error}')
-
-        # Check if URL does not exist
-        if len(urls) == 0:
-            embed = discord.Embed(title=':warning:無効なURLが指定されました、URLを確認して再度実行してください。', color=0xff0000)
-            await ctx.followup.send(embed=embed)
-            logger.warning('URL does not exist')
-            return
-
-        json_list = {'owner': [ctx.user.id], 'locked': locked, 'urls': urls}
-        try:
-            with open(f'{PLAYLIST_PATH}{playlist}.json', 'w', encoding='utf-8') as f:
-                f.write(orjson.dumps(json_list, option=orjson.OPT_INDENT_2).decode('utf-8'))
-
-            # Change Permission
-            os.chmod(f'{PLAYLIST_PATH}{playlist}.json', 0o666)
-
-        except Exception as e:
-            embed = discord.Embed(title=':warning:使用できない文字が入っています、別の名前に変えてください。', color=0xffffff)
-            await ctx.followup.send(embed=embed)
-            logger.warning(f'NameError_JSON: {e}')
-            return
-
-        embed = discord.Embed(title=f'プレイリスト:{playlist}を作成しました。', description='以下のURLをを追加しました。', color=0xffffff)
-        Playlist.record_play_date(f'{playlist}.json', datetime.now())
-        Playlist.save_playlists_date()
-        await ctx.followup.send(embed=embed)
-        logger.info(f'Create Playlist: {playlist}')
-
-        # Show Queue
-        embed = Utils.create_queue_embed(urls, f'プレイリスト:{playlist}の曲の一覧', f'プレイリストに追加された曲数:{len(urls)}曲')
-        await ctx.channel.send(embed=embed)
-
-
-# Add music to Playlist Command
-@tree.command(
-    guild=GUILD,
-    name='プレイリストに曲を追加',
-    description='プレイリストに曲を追加します。'
-)
-@discord.app_commands.describe(
-    urls='動画のURL',
-    playlist='プレイリスト名'
-)
-@app_commands.autocomplete(playlist=playlist_autocomplete)
-async def add_music_to_playlist(ctx: discord.Interaction, playlist: str, urls: str):
-    if not os.path.exists(f'{PLAYLIST_PATH}{playlist}.json'):
-        embed = discord.Embed(title=f':warning:プレイリスト{playlist}が存在しません、名前が合っているか確認してください。', color=0xffff00)
-        await ctx.response.send_message(embed=embed)
-        logger.warning('Playlist does not exist')
-        return
-    # Set Start Time for Debugging
-    start = time.time()
-
-    await ctx.response.defer()
-    urls = urls.split(',')
-    urls = Utils.delete_space(urls)
-    # Delete Duplicate URLs
-    if len(urls) != len(list(dict.fromkeys(urls))):
-        embed = discord.Embed(title=':warning:重複したURLは削除されました。', color=0xffffff)
-        logger.debug('Delete Duplicate URLs')
-        await ctx.channel.send(embed=embed)
-    urls = list(dict.fromkeys(urls))
-    urls, error = Utils.check_url(urls)
-
-    # Check if Error Occurred
-    if error:
-        embed = discord.Embed(title=':warning:以下のエラーが発生しました。', description='\n'.join(error), color=0xff0000)
-        await ctx.channel.send(embed=embed)
-        logger.error(f'CheckURLErrors: {error}')
-
-    # Check if URL does not exist
-    if len(urls) == 0:
-        embed = discord.Embed(title=':warning:無効なURLが指定されました、URLを確認して再度実行してください。', color=0xff0000)
-        await ctx.followup.send(embed=embed)
-        logger.warning('URL does not exist')
-        return
-
-    with open(f'{PLAYLIST_PATH}{playlist}.json', 'r', encoding='utf-8') as f:
-        json_list = orjson.loads(f.read())
-        if json_list['locked']:
-            if ctx.user.id not in json_list['owner']:
-                embed = discord.Embed(title=f':warning:プレイリスト{playlist}は編集が禁止されています。', color=0xffff00)
-                await ctx.followup.send(embed=embed)
-                logger.warning('Playlist is locked')
-                return
-
-        skip_urls = []
-
-    # Delete Duplicate URLs
-    for url in urls[:]:
-        if url in json_list['urls']:
-            skip_urls.append(url)
-            urls.remove(url)
-
-    if len(skip_urls) != 0:
-        embed = discord.Embed(title=':warning:登録済みのURLはスキップされました。', color=0xffff00)
-        await ctx.channel.send(embed=embed)
-
-    if len(urls) == 0:
-        embed = discord.Embed(title=':warning:プレイリストに登録できるURLがありません、URLを確認し再度コマンドを実行してください。', color=0xffffff)
-        await ctx.followup.send(embed=embed)
-        logger.warning('URL does not exist')
-        return
-
-    json_list['urls'].extend(urls)
-    with open(f'{PLAYLIST_PATH}{playlist}.json', 'w', encoding='utf-8') as f:
-        f.write(orjson.dumps(json_list, option=orjson.OPT_INDENT_2).decode('utf-8'))
-
-    embed = discord.Embed(title=f'プレイリスト:{playlist}に曲を追加しました。', description='以下のURLをを追加しました。', color=0xffffff)
-    Playlist.record_play_date(f'{playlist}.json', datetime.now())
-    Playlist.save_playlists_date()
-
-    endtime = time.time()
-    logger.debug(f'Add Music to Playlist Command processing time: {endtime - start}sec')
-    logger.info(f'Add Music to Playlist: {playlist}')
-    await ctx.followup.send(embed=embed)
-
-    # Show Queue
-    embed = Utils.create_queue_embed(urls, title=f'プレイリスト:{playlist}の曲の一覧',
-                                     footer=f'プレイリストに追加された曲数:{len(urls)}曲', addPages=True)
-    await ctx.channel.send(embed=embed)
-
-
-# Delete Playlist Command
-@tree.command(
-    guild=GUILD,
-    name='プレイリストを削除',
-    description='プレイリストを削除します。'
-)
-@discord.app_commands.describe(
-    playlist='プレイリスト名'
-)
-@app_commands.autocomplete(playlist=playlist_autocomplete)
-async def delete_playlist(ctx: discord.Interaction, playlist: str):
-    if not os.path.exists(f'{PLAYLIST_PATH}{playlist}.json'):
-        embed = discord.Embed(title=f':warning:プレイリスト{playlist}が存在しません、名前が合っているか確認してください。', color=0xffff00)
-        await ctx.response.send_message(embed=embed)
-        return
-
-    with open(f'{PLAYLIST_PATH}{playlist}.json', 'r', encoding='utf-8') as f:
-        json_list = orjson.loads(f.read())
-        if json_list['locked']:
-            if ctx.user.id not in json_list['owner']:
-                embed = discord.Embed(title=f':warning:プレイリスト{playlist}は編集が禁止されています。', color=0xffff00)
-                await ctx.response.send_message(embed=embed)
-                return
-    await ctx.response.send_modal(DeleteInput(playlist))
-
-
-# Delete music from Playlist Command
-@tree.command(
-    guild=GUILD,
-    name='プレイリストから曲を削除',
-    description='プレイリストに登録された曲を削除します。'
-)
-@discord.app_commands.describe(
-    urls='動画のURL',
-    playlist='プレイリスト名'
-)
-@app_commands.autocomplete(playlist=playlist_autocomplete)
-async def delete_music_from_playlist(ctx: discord.Interaction, playlist: str, urls: str):
-    if not os.path.exists(f'{PLAYLIST_PATH}{playlist}.json'):
-        embed = discord.Embed(title=f':warning:プレイリスト{playlist}が存在しません、名前が合っているか確認してください。', color=0xffff00)
-        await ctx.response.send_message(embed=embed)
-        return
-    else:
-        urls = urls.split(',')
-        urls = Utils.delete_space(urls)
-        with open(f'{PLAYLIST_PATH}{playlist}.json', 'r', encoding='utf-8') as f:
-            json_list = orjson.loads(f.read())
-            if json_list['locked']:
-                if ctx.user.id not in json_list['owner']:
-                    embed = discord.Embed(title=f':warning:プレイリスト{playlist}は編集が禁止されています。', color=0xffff00)
-                    await ctx.response.send_message(embed=embed)
-                    logger.warning('Playlist is locked')
-                    return
-
-        targets_urls = list(set(urls) & set(json_list['urls']))
-
-        if not targets_urls:
-            embed = discord.Embed(title=':warning:指定されたURLはプレイリストに登録されていません。', color=0xffff00)
-            await ctx.response.send_message(embed=embed)
-            logger.warning('URL does not exist')
-            return
-
-        for target in targets_urls:
-            json_list['urls'].remove(target)
-
-        if len(json_list['urls']) == 0:
-            os.remove(f'{PLAYLIST_PATH}{playlist}.json')
-            embed = discord.Embed(title=f':warning:プレイリストに登録されている曲がなくなったため、プレイリスト：{playlist}を削除しました。', color=0xffff00)
-            await ctx.response.send_message(embed=embed)
-            logger.warning('Playlist is empty and deleted.')
-            return
-
-        with open(f'{PLAYLIST_PATH}{playlist}.json', 'w', encoding='utf-8') as f:
-            f.write(orjson.dumps(json_list, option=orjson.OPT_INDENT_2).decode('utf-8'))
+    async def on_app_command_error(self, interaction: discord.Interaction, error):
+        """アプリケーションコマンドエラー処理"""
+        logger.critical(f'🚨 アプリケーションコマンドでクリティカルエラーが発生しました: {error}')
+        logger.error(
+            f'📍 エラー発生場所 - コマンド: {interaction.command.name if interaction.command else "不明"}, '
+            f'ユーザー: {interaction.user.display_name}'
+        )
 
         embed = discord.Embed(
-            title=f'プレイリスト:{playlist}から曲を削除しました。', description='削除後のプレイリストの曲一覧はこちらです。', color=0xffffff)
-        await ctx.response.send_message(embed=embed)
-        logger.info(f'Delete Music from Playlist: {playlist}')
-        Playlist.record_play_date(f'{playlist}.json', datetime.now())
-        Playlist.save_playlists_date()
-
-        # Show Queue
-        embed = Utils.create_queue_embed(json_list["urls"], title=f'プレイリスト:{playlist}の曲の一覧',
-                                         footer=f'プレイリストに登録された曲数:{len(json_list["urls"])}曲', addPages=True)
-        await ctx.channel.send(embed=embed)
+            title=f'🚨 重大なエラーが発生しました: {error}',
+            color=0xff0000
+        )
+        await interaction.channel.send(embed=embed)
 
 
-# Rename Playlist Command
-@tree.command(
-    guild=GUILD,
-    name='プレイリスト名を変更',
-    description='プレイリスト名を変更します。'
-)
-@discord.app_commands.describe(
-    playlist='プレイリスト名',
-    new_playlist='新しいプレイリスト名'
-)
-@app_commands.autocomplete(playlist=playlist_autocomplete)
-async def rename_playlist(ctx: discord.Interaction, playlist: str, new_playlist: str):
-    if not os.path.exists(f'{PLAYLIST_PATH}{playlist}.json'):
-        embed = discord.Embed(title=f':warning:プレイリスト{playlist}が存在しません、名前が合っているか確認してください。', color=0xffff00)
-        await ctx.response.send_message(embed=embed)
-        logger.warning('Playlist does not exist')
-        return
-    elif os.path.exists(f'{PLAYLIST_PATH}{new_playlist}.json'):
-        embed = discord.Embed(title=f':warning:プレイリスト{new_playlist}が既に存在します。', color=0xffff00)
-        await ctx.response.send_message(embed=embed)
-        logger.warning('Playlist already exists')
-        return
-    else:
-        Playlist.rename_playlist(playlist, new_playlist)
-        embed = discord.Embed(title=f'プレイリスト名を{new_playlist}に変更しました。', color=0xffffff)
-        await ctx.response.send_message(embed=embed)
+def main():
+    """メイン関数"""
+    bot = PlayAudioBot()
+    bot.run(bot_config.token)
 
 
-# Show Playlist Command
-@tree.command(
-    guild=GUILD,
-    name='プレイリスト一覧を表示',
-    description='登録されているプレイリスト一覧を表示します。'
-)
-async def show_playlist(ctx: discord.Interaction):
-    # lists = os.listdir(PLAYLIST_PATH)
-    lists = [os.path.splitext(file)[0] for file in os.listdir(PLAYLIST_PATH) if file.endswith('.json')]
-    logger.debug(f'Playlist Files: {lists}')
-    if lists == []:
-        embed = discord.Embed(title=':warning:登録されているプレイリストが存在しません。', color=0xffff00)
-        await ctx.response.send_message(embed=embed)
-        logger.warning('Playlist does not exist')
-        return
-    embed = discord.Embed(title='登録されているプレイリスト一覧を表示します。', color=0xffffff)
-    await ctx.response.send_message(embed=embed)
-    # Show Playlist
-    embed = Utils.create_queue_embed(lists, title='登録されているプレイリスト一覧',
-                                     footer=f'登録されているプレイリスト数:{len(lists)}',
-                                     addPages=True, getTitle=False)
-    await ctx.channel.send(embed=embed)
-    logger.info('Show Playlist Command')
-
-
-# Show Music from Playlist Command
-@tree.command(
-    guild=GUILD,
-    name='プレイリストに登録されている曲を表示',
-    description='プレイリストに登録された曲を表示します。'
-)
-@discord.app_commands.describe(
-    playlist='プレイリスト名'
-)
-@app_commands.autocomplete(playlist=playlist_autocomplete)
-async def show_music_from_playlist(ctx: discord.Interaction, playlist: str):
-    if not os.path.exists(f'{PLAYLIST_PATH}{playlist}.json'):
-        embed = discord.Embed(title=f':warning:プレイリスト{playlist}が存在しません、名前が合っているか確認してください。', color=0xffff00)
-        await ctx.response.send_message(embed=embed)
-        return
-    with open(f'{PLAYLIST_PATH}{playlist}.json', 'r', encoding='utf-8') as f:
-        json_list = orjson.loads(f.read())
-        embed = discord.Embed(title=f'プレイリスト:{playlist}に登録されている曲一覧', color=0xffffff)
-        await ctx.response.send_message(embed=embed)
-
-        # Show Queue
-        embed = Utils.create_queue_embed(json_list['urls'], title=f'プレイリスト:{playlist}の曲の一覧',
-                                         footer=f'プレイリストに登録された曲数:{len(json_list["urls"])}曲', addPages=True)
-        await ctx.channel.send(embed=embed)
-
-
-# Change Playlist Lock Command
-@tree.command(
-    guild=GUILD,
-    name='プレイリストのロックを変更',
-    description='プレイリストの編集ロックを変更します。'
-)
-@discord.app_commands.describe(
-    playlist='プレイリスト名',
-    locked='プレイリストの編集を禁止する'
-)
-@app_commands.autocomplete(playlist=playlist_autocomplete)
-async def change_playlist_lock(ctx: discord.Interaction, playlist: str, locked: bool):
-    if not os.path.exists(f'{PLAYLIST_PATH}{playlist}.json'):
-        embed = discord.Embed(title=f':warning:プレイリスト{playlist}が存在しません、名前が合っているか確認してください。', color=0xffff00)
-        await ctx.response.send_message(embed=embed)
-        return
-    await ctx.response.defer()
-    with open(f'{PLAYLIST_PATH}{playlist}.json', 'r', encoding='utf-8') as f:
-        json_list = orjson.loads(f.read())
-    if ctx.user.id not in json_list['owner']:
-        embed = discord.Embed(title=':warning:プレイリストの編集ロックを変更できるのは作成者のみです。', color=0xff0000)
-        await ctx.followup.send(embed=embed)
-        logger.warning('Playlist is locked')
-        return
-    json_list['locked'] = locked
-    with open(f'{PLAYLIST_PATH}{playlist}.json', 'w', encoding='utf-8') as f:
-        f.write(orjson.dumps(json_list, option=orjson.OPT_INDENT_2).decode('utf-8'))
-
-        result = 'ロックを有効化しました。' if locked else 'ロックを無効化しました。'
-        embed = discord.Embed(title=f'プレイリスト:{playlist}の編集{result}', color=0xffffff)
-    await ctx.followup.send(embed=embed)
-
-
-# Join Playlist Command
-@tree.command(
-    guild=GUILD,
-    name='プレイリストを結合する',
-    description='指定した2つのプレイリストを結合します。'
-)
-@discord.app_commands.describe(
-    parent_playlist='結合先の親プレイリスト名',
-    child_playlist='結合する子プレイリスト名'
-)
-@app_commands.autocomplete(parent_playlist=playlist_autocomplete, child_playlist=playlist_autocomplete)
-async def join_playlist(ctx: discord.Interaction, parent_playlist: str, child_playlist: str):
-    if parent_playlist == child_playlist:
-        embed = discord.Embed(title=':warning:同じプレイリスト同士は結合できません。', color=0xffff00)
-        logger.warning('equal playlist')
-        await ctx.response.send_message(embed=embed)
-        return
-    if not (os.path.exists(f'{PLAYLIST_PATH}{parent_playlist}.json') and
-            os.path.exists(f'{PLAYLIST_PATH}{child_playlist}.json')):
-        embed = discord.Embed(
-            title=f':warning:プレイリスト{parent_playlist}または{child_playlist}が存在しません、名前が合っているか確認してください。', color=0xff0000)
-        await ctx.response.send_message(embed=embed)
-        return
-    await ctx.response.defer()
-    with open(f'{PLAYLIST_PATH}{parent_playlist}.json', 'r', encoding='utf-8') as f:
-        parent_json = orjson.loads(f.read())
-    if parent_json['locked']:
-        if ctx.user.id not in parent_json['owner']:
-            embed = discord.Embed(title=f':warning:プレイリスト{parent_playlist}は編集が禁止されています。', color=0xffff00)
-            await ctx.followup.send(embed=embed)
-            logger.warning('Playlist is locked')
-            return
-    with open(f'{PLAYLIST_PATH}{child_playlist}.json', 'r', encoding='utf-8') as f:
-        child_json = orjson.loads(f.read())
-
-    skip_urls = []
-
-    for url in child_json['urls'][:]:
-        if url not in parent_json['urls']:
-            parent_json['urls'].append(url)
-        else:
-            child_json['urls'].remove(url)
-            skip_urls.append(url)
-
-    if len(skip_urls) != 0:
-        embed = discord.Embed(title=':warning:登録済みのURLはスキップされました。', color=0xffff00)
-        await ctx.channel.send(embed=embed)
-
-    if len(child_json['urls']) == 0:
-        embed = discord.Embed(title=':warning:プレイリストに新たに登録できるURLがありませんでした。', color=0xffffff)
-        await ctx.followup.send(embed=embed)
-        logger.warning('URL does not exist')
-        return
-
-    json_list = {'owner': parent_json['owner'], 'locked': parent_json['locked'], 'urls': parent_json['urls']}
-    with open(f'{PLAYLIST_PATH}{parent_playlist}.json', 'w', encoding='utf-8') as f:
-        f.write(orjson.dumps(json_list, option=orjson.OPT_INDENT_2).decode('utf-8'))
-
-    embed = discord.Embed(title=f'プレイリスト:{child_playlist}を{parent_playlist}に結合しました。', color=0xffffff)
-    await ctx.followup.send(embed=embed)
-
-    # Show Queue
-    embed = Utils.create_queue_embed(child_json['urls'], title=f'プレイリスト:{parent_playlist}に追加された曲の一覧',
-                                     footer=f'プレイリストに登録された曲数:{len(child_json["urls"])}曲', addPages=True)
-    await ctx.channel.send(embed=embed)
-
-
-# Reset Bot Command
-@tree.command(
-    guild=GUILD,
-    name='reset',
-    description='Botを再起動します。'
-)
-async def reset_bot(ctx: discord.Interaction):
-    global NEXT_SONG, IS_LOOP
-    NEXT_SONG = None
-    IS_LOOP = False
-    vc = discord.utils.get(client.voice_clients, guild=ctx.guild)
-    try:
-        vc.cleanup()
-        await vc.disconnect()
-    except Exception:
-        pass
-    Queue.clear_queue()
-    await client.change_presence(activity=None)
-    embed = discord.Embed(title='リセットします。', color=0xffffff)
-    await ctx.response.send_message(embed=embed)
-
-
-@reset_bot.error
-async def play_error(ctx: discord.Interaction, error):
-    await ctx.response.send_message(error)
-    return
-
-
-# Log Command
-@tree.command(
-    guild=GUILD,
-    name='log',
-    description='最新のログファイルを送付します。'
-)
-async def log(ctx: discord.Interaction):
-    embed = discord.Embed(title='ログを出力します。', color=0xffffff)
-    await ctx.response.send_message(embed=embed, file=discord.File(LOG_PATH))
-
-
-# Setting Command
-@tree.command(
-    guild=GUILD,
-    name='settings',
-    description='設定を変更します。'
-)
-async def setting(ctx: discord.Interaction, interrupt: bool):
-    global INTERRUPT
-    INTERRUPT = interrupt
-    with open(SETTING_PATH, 'w', encoding='utf-8') as f:
-        f.write(orjson.dumps({'interrupt': interrupt}, option=orjson.OPT_INDENT_2).decode('utf-8'))
-    embed = discord.Embed(title='設定を変更しました。', color=0xffffff)
-    await ctx.response.send_message(embed=embed)
-
-
-# Show Setting Command
-@tree.command(
-    guild=GUILD,
-    name='show_setting',
-    description='設定を表示します。'
-)
-async def show_setting(ctx: discord.Interaction):
-    with open(SETTING_PATH, 'r', encoding='utf-8') as f:
-        setting = orjson.loads(f.read())
-    embed = discord.Embed(title='設定', color=0xffffff)
-    embed.add_field(name='曲割り込み機能', value=setting['interrupt'])
-    await ctx.response.send_message(embed=embed)
-
-
-# Disconnect Bot Command
-@client.event
-async def on_voice_state_update(member, before, after):
-    global NEXT_SONG, IS_LOOP
-    voice_state = member.guild.voice_client
-    if voice_state is not None and len(voice_state.channel.members) == 1:
-        voice_state.cleanup()
-        IS_LOOP = False
-        NEXT_SONG = None
-        Queue.clear_queue()
-        await client.change_presence(activity=None)
-        await voice_state.disconnect()
-
-
-# Discord Bot Start
-@client.event
-async def on_ready():
-    logger.info('Discord Bot Started...')
-    check_music.start()
-    await tree.sync(guild=GUILD)
-    logger.info('Discord Bot Command Synced...')
-
-
-@tree.error
-async def on_app_command_error(ctx: discord.Interaction, error):
-    logger.critical(f'Error: {error}')
-    embed = discord.Embed(
-            title=f'CriticalError!!!: {error}', color=0xff0000)
-    await ctx.channel.send(embed=embed)
-
-client.run(TOKEN)
+if __name__ == '__main__':
+    main()
